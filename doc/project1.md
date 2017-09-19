@@ -4,7 +4,7 @@ Design Document for Project 1: Threads
 ## Group Members
 
 * Aaron Xu <aaxu@berkeley.edu>
-* FirstName LastName <email@domain.example>
+* Yena Kim <yenakim@berkeley.edu>
 * FirstName LastName <email@domain.example>
 * FirstName LastName <email@domain.example>
 
