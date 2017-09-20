@@ -5,7 +5,7 @@ Design Document for Project 1: Threads
 
 * Aaron Xu <aaxu@berkeley.edu>
 * Yena Kim <yenakim@berkeley.edu>
-* FirstName LastName <email@domain.example>
+* Aidan Meredith <aidan_meredith@berkeley.edu>
 * FirstName LastName <email@domain.example>
 
 
