@@ -194,7 +194,7 @@ to how we store the ready threads.
 # Additional Questions
 
 ## 1. Priority Donations Not Taken into Account
-*/ PSEUDOCODE: Creates three threads. The thread of medium priority is active. When a thread of higher priority is waiting on a thread of lower priority, the thread of lower priority should become the active thread. Expected outcome: Assert passes. Actual outcome: Assert fails. */
+'*/ PSEUDOCODE: Creates three threads. The thread of medium priority is active. When a thread of higher priority is waiting on a thread of lower priority, the thread of lower priority should become the active thread. Expected outcome: Assert passes. Actual outcome: Assert fails. */
 struct lock l;
 void* test {
     tid_t t1;
@@ -216,7 +216,7 @@ thread_func t3func(void*) {
         thread_yield();
      }
      lock_acquire(l);
-}
+}'
     
     
 ## 2. MLFQS Scheduler Table
