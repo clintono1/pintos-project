@@ -57,7 +57,14 @@ interrupts to be disabled, so there will not be a race condition there either.
 
 ## Rationale
 
-The reason we use this method is because we may need to
+This is better than using a lock or a semaphore because that would require an
+additional synchronization variable. We can directly use thread_block() so we
+do not have to deal with the extra overhead of using a synchronization variable.
+The only way that we could think of unblocking the sleeping thread was to
+access the threads in `timer_interrupt()` through the `all_list` variabe.
+However, this would require us to look through all the threads to determine
+whether or not they were sleeping. It would be faster to keep a list that keeps
+track of all the blocked threads.
 
 # Part 2: Priority Scheduler
 
