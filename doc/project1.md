@@ -58,10 +58,10 @@ interrupts to be disabled, so there will not be a race condition there either.
 ## Rationale
 
 This is better than using a lock or a semaphore because that would require an
-additional synchronization variable. We can directly use thread_block() so we
+additional synchronization variable. We can directly use `thread_block()` so we
 do not have to deal with the extra overhead of using a synchronization variable.
 The only way that we could think of unblocking the sleeping thread was to
-access the threads in `timer_interrupt()` through the `all_list` variabe.
+access the threads in `timer_interrupt()` through the `all_list` variable.
 However, this would require us to look through all the threads to determine
 whether or not they were sleeping. It would be faster to keep a list that keeps
 track of all the blocked threads.
@@ -83,26 +83,28 @@ struct lock
 
 We need this variable because we need to keep track of the highest priority thread
 waiting and then change the holder of this lock to have this priority if it is higher.
-We will also modify the `sema_down` function so that it sets the priority of the lock's holder
+We will also modify the `lock_acquire` function so that it sets the priority of the lock's holder
 (if there is one), to a higher priority of the current thread has a
 higher priority. We'll also edit the `next_thread_to_run` function so that
 it returns the thread with the highest priority. We must also modify `timer_interrupt()`
 so that we yield if our effective priority is no longer the highest.
-Lastly, we'll need a new function `getEffectivePriority` that returns the
-effective priority of the current thread.
+Lastly, we'll change `thread_get_priority` so that it returns the effective priority of the
+current thread.
 
 ## Algorithms
 
 ### Choosing the next thread to run
 We can iterate through `all_list` and find the thread with the highest priority.
 This will be implemented in `next_thread_to_run` by simply iterating through the list
-and keeping track of the max priority thread and runs in O(n) time.
+and keeping track of the max priority thread and runs in O(n) time. When a thread no longer 
+has the highest effective priority (it calls `thread_set_priority()` with a low value or releases 
+a lock), we will call `thread_yield` to make sure we run the highest priority thread next (which
+may still be the same thread). 
 
 ### Acquiring a lock:
 When a function acquires a lock, it will call `lock_acquire`. At this point, it
 should update the `highestPriorityWaiting` instance variable of the lock if
-it is higher than the current value. The `lock_aquire` function calls `sema_down`,
-so it should update the lock's donation properly.
+it is higher than the current value, which should update the lock's donation properly.
 
 ### Releasing a Lock:
 Before releasing the lock, we will set the `highestPriorityWaiting` variable of
@@ -110,22 +112,19 @@ the lock to 0. Then, we have to update the priority of the current thread
 with its effective priority.
 
 ### Computing the Effective Priority:
-Inside `getEffectivePriority`, we can iterate through all the locks and
+Inside `thread_get_priority`, we can iterate through all the locks and
 see if the current thread is a holder of any of them. If so, we set the priority
 of the thread to the maximum `highestPriorityWaiting` of all the threads.
 
 ### Priority Scheduling for Semaphores, Locks, and Condition Variables:
-All of the steps above should apply to semaphores and since locks call
-semaphore methods internally, it should apply to locks as well. The only thing
-we would have to change for semaphores is that if a thread is waiting to down
-a semaphore, all current holders of the semaphore should have their priority
-raised to the highest priority waiter. In condition variables, we will
-have to set the priority of the holder to match the waiter with the highest priority.
+All of the steps above should apply to locks. However, we don't want to implement priority 
+donation for semaphores and condition variables. Whenever we release a resource, we will
+iterate through `block_list` (the list of blocked threads we created in part 1) and find
+the highest priority thread that is waiting for that resource and unblock it.
 
 ### Changing Thread's Priority:
 The thread's priority should be changed at the beginning of `timer_interrupt()`.
 It should get its priority changed to its effective priority.
-
 
 ## Synchronization
 The only global variables we access are the the synchronization primatives. One
@@ -133,7 +132,7 @@ situation of a race condition happening is if two threads try to set
 a synchronization primative's `highestPriorityWaiting` variable at the same time.
 Then, it becomes possible that both threads see a value of 0 and try to set it to
 their own priority and then the lower priority may end up as the final value. In order
-to prevent this, we set this priority inside the `sema_down` function after interrupts
+to prevent this, we set this priority inside the `lock_acquire` function after interrupts
 are disabled. This way, one thread cannot access the value until the other thread
 is done modifying this value.
 
