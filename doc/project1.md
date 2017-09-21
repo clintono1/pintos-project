@@ -48,7 +48,12 @@ so it will no longer be sleeping.
 ## Synchronization
 
 There should be no synchronization issues because we are not accessing any
-shared resources.
+shared resources. The only thing we are changing the thead's state, the
+`block_list`, and the `ticks_to_sleep` of the threads. The running thread will
+call `timer_sleep` which accesses its own `ticks_to_sleep`. The only other
+function that should access this is the timer_interrupt, and that does not
+provide a race condition. Then, we call `thread_block` which requires
+interrupts to be disabled, so there will not be a race condition there either.
 
 ## Rationale
 
