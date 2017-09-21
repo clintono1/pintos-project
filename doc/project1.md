@@ -80,8 +80,27 @@ track of all the blocked threads.
 
 ## Data structures and functions
 
+We will need to keep track of a static variable `load_avg`. Then we can keep
+track of another static variable `recent_cpu_coeff` which uses `load_avg` and
+is used in the `recent_cpu` formula.
+
+Note that we compute these above variables based on the formulas given in the
+project specs.
+
 ## Algorithms
+
+We can calculate the priority of each thread in the priority queues (do not
+update threads that are blocked). We do this every 4th tick in `timer_interrupt`.
+We do this by calling `thread_get_recentcpu()` and `thread_get_load_avg()` and
+returning the value of the formula given in the specs. We do this only if the
+boolean variable `thread_mlfqs` is `true`, otherwise we use the scheduler
+implemented in part 2. When we recalculate the priorities, we now have to place
+the threads in the appropriate queues based on their new priorities. We iterate
+through all the threads again to place them in the corresponding queue.
 
 ## Synchronization
 
 ## Rationale
+The formulas for calculating each priority were given and we're simply putting
+it to code.
+
