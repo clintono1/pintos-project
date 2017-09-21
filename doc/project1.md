@@ -85,3 +85,22 @@ track of all the blocked threads.
 ## Synchronization
 
 ## Rationale
+
+# Additional Questions
+
+## Priority Donations Not Taken into Account
+
+## MLFQS Scheduler Table
+
+timer ticks | R(A) | R(B) | R(C) | P(A) | P(B) | P(C) | thread to run
+------------|------|------|------|------|------|------|--------------
+ 0          |      |      |      |      |      |      |
+ 4          |      |      |      |      |      |      |
+ 8          |      |      |      |      |      |      |
+12          |      |      |      |      |      |      |
+16          |      |      |      |      |      |      |
+20          |      |      |      |      |      |      |
+24          |      |      |      |      |      |      |
+28          |      |      |      |      |      |      |
+32          |      |      |      |      |      |      |
+36 | | | | | | |
