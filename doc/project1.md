@@ -88,9 +88,9 @@ track of all the blocked threads.
 
 # Additional Questions
 
-## Priority Donations Not Taken into Account
+## 1. Priority Donations Not Taken into Account
 
-## MLFQS Scheduler Table
+## 2. MLFQS Scheduler Table
 
 timer ticks | R(A) | R(B) | R(C) | P(A) | P(B) | P(C) | thread to run
 ------------|------|------|------|------|------|------|--------------
@@ -104,3 +104,7 @@ timer ticks | R(A) | R(B) | R(C) | P(A) | P(B) | P(C) | thread to run
 28          | 17.33| 9.33 | 1.33 | 58   | 58   | 58   | A + B + C
 32          | 18.66| 10.66| 2.66 | 58   | 58   | 58   | A + B + C
 36          | 20   | 12   |  4   | 58   | 58   | 58   | A + B + C
+
+## 3. Ambiquities in Scheduler Spec
+
+When multiple threads have the same priority, it isn't clear which thread is running at when a timer tick is perceived (which would affect the recent_cpu value). In this case, we tried to imagine dividing these ticks into equal parts and incrementing recent_cpu by these values.  This is not specified in the spec so the program's expected behavior is unknown.
