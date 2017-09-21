@@ -107,4 +107,4 @@ timer ticks | R(A) | R(B) | R(C) | P(A) | P(B) | P(C) | thread to run
 
 ## 3. Ambiquities in Scheduler Spec
 
-When multiple threads have the same priority, it isn't clear which thread is running at when a timer tick is perceived (which would affect the recent_cpu value). In this case, we tried to imagine dividing these ticks into equal parts and incrementing recent_cpu by these values.  This is not specified in the spec so the program's expected behavior is unknown.
+When multiple threads have the same priority, it isn't clear which thread is running at time of timer tick (which would affect the recent_cpu value). In this case, we tried to imagine dividing these ticks into equal parts and incrementing recent_cpu by these values.  This is not specified in the spec so the program's intended behavior is unknown.
