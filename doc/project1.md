@@ -70,7 +70,7 @@ track of all the blocked threads.
 
 ## Data structures and functions
 
-We will edit the lock struct so that it now contains two more variables.
+We will edit the lock struct so that it now contains one more variable.
 
 ```
 struct lock
@@ -129,8 +129,8 @@ It should get its priority changed to its effective priority.
 
 ## Synchronization
 The only global variables we access are the the synchronization primatives. One
-situation of a race conditioning happening is if two threads try to set
-a synchronization primative's `highestPriorityWaiting variable at the same time.
+situation of a race condition happening is if two threads try to set
+a synchronization primative's `highestPriorityWaiting` variable at the same time.
 Then, it becomes possible that both threads see a value of 0 and try to set it to
 their own priority and then the lower priority may end up as the final value. In order
 to prevent this, we set this priority inside the `sema_down` function after interrupts
@@ -158,23 +158,37 @@ is used in the `recent_cpu` formula.
 Note that we compute these above variables based on the formulas given in the
 project specs.
 
+We also will need a static variable `ready_threads_pq` pointing to a priority queue
+to hold all the ready threads in order of priority.
+
 ## Algorithms
 
-We can calculate the priority of each thread in the priority queues (do not
-update threads that are blocked). We do this every 4th tick in `timer_interrupt`.
-We do this by calling `thread_get_recentcpu()` and `thread_get_load_avg()` and
-returning the value of the formula given in the specs. We do this only if the
-boolean variable `thread_mlfqs` is `true`, otherwise we use the scheduler
-implemented in part 2. When we recalculate the priorities, we now have to place
-the threads in the appropriate queues based on their new priorities. We iterate
-through all the threads again to place them in the corresponding queue.
+We keep track of all the ready threads and their priorities in one priority queue.
+We update all the priorities (not including the threads that are blocked). We do this 
+every 4th tick in `timer_interrupt()` by calling `thread_get_recentcpu()` and 
+`thread_get_load_avg()` and returning the value of the formula given in the specs. This 
+type of scheduling only occurs when the boolean variable `thread_mlfqs` is `true`, 
+otherwise we use the scheduler implemented in part 2. When we recalculate the priorities, 
+the order of the priority queue automatically changes. We update `load_avg`, `recent_cpu_coeff`
+and `recent_cpu_coeff` every second in the same `timer_interrupt()` function. When we 
+calculate `recent_cpu`, we are sure to calculate `recent_cpu_coeff` first in order to avoid 
+overflow problems, then multiple it by `recent_cpu` in the formula.
 
 ## Synchronization
+
+There should be no synchronization issues for this part of the project. This is because 
+every time we access the global variables (`load_avg`, `recent_cpu_coeff`, and `ready_threads_pq`),
+we are in the middle of an interrupt, so no other threads can access them at the same time.	
+Since we are accessing shared data in only `timer_interrupt()` we do not have to worry about
+race conditions.
 
 ## Rationale
 
 The formulas for calculating each priority were given and we're simply putting
-it to code.
+it to code. We chose to use one priority queue over 64 queues because the order will 
+still remain the same. This reduces the space complexity by eliminating the empty queues.
+However, by doing this, we have a very long priority queue, and there may be a better solution
+to how we store the ready threads.
 
 
 
@@ -197,6 +211,6 @@ timer ticks | R(A) | R(B) | R(C) | P(A) | P(B) | P(C) | thread to run
 32          | 18.66| 10.66| 2.66 | 58   | 58   | 58   | A + B + C
 36          | 20   | 12   |  4   | 58   | 58   | 58   | A + B + C
 
-## 3. Ambiquities in Scheduler Spec
+## 3. Ambiguities in Scheduler Spec
 
 When multiple threads have the same priority, it isn't clear which thread is running at time of timer tick (which would affect the recent_cpu value). In this case, we tried to imagine dividing these ticks into equal parts and incrementing recent_cpu by these values.  This is not specified in the spec so the program's intended behavior is unknown.
