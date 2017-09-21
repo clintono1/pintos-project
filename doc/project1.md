@@ -194,7 +194,31 @@ to how we store the ready threads.
 # Additional Questions
 
 ## 1. Priority Donations Not Taken into Account
+*/ PSEUDOCODE: Creates three threads. The thread of medium priority is active. When a thread of higher priority is waiting on a thread of lower priority, the thread of lower priority should become the active thread. Expected outcome: Assert passes. Actual outcome: Assert fails. */
+struct lock l;
+void* test {
+    tid_t t1;
+    tid_t t2;
+    tid_t t3;
+    lock_init(&l);
+    t1 = thread_create ("t1", 20, (thread_func *) None, void *);
+    t2 = thread_create ("t2", 42, (thread_func *) None, void *);
+    t3 = thread_create ("t3", 63, (thread_func *) None, void *);
+    if (thread_tid == t1) {
+        lock_acquire(l);
+    }
+    schedule();
+    Assert(thread_current().tid == t1);
+}
 
+thread_func t3func(void*) {
+     while (l == 0) {
+        thread_yield();
+     }
+     lock_acquire(l);
+}
+    
+    
 ## 2. MLFQS Scheduler Table
 
 timer ticks | R(A) | R(B) | R(C) | P(A) | P(B) | P(C) | thread to run
