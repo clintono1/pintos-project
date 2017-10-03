@@ -4,6 +4,8 @@
 #include <list.h>
 #include <stdbool.h>
 
+
+#define MAX(a, b) ((a > b) ? a : b)
 /* A counting semaphore. */
 struct semaphore
   {
@@ -30,6 +32,9 @@ void lock_acquire (struct lock *);
 bool lock_try_acquire (struct lock *);
 void lock_release (struct lock *);
 bool lock_held_by_current_thread (const struct lock *);
+bool compare_waiters (const struct list_elem *,
+                      const struct list_elem *,
+                      void *);
 
 /* Condition variable. */
 struct condition
