@@ -29,6 +29,7 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
+void thread_check_timer (struct thread *t, void * randomArg UNUSED);
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -92,8 +93,9 @@ timer_sleep (int64_t ticks)
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks)
-    thread_yield ();
+  struct thread *t = thread_current ();
+  t->wakeAtTick = start + ticks;
+  thread_block ();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -171,7 +173,20 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  thread_action_func *func = &thread_check_timer;
+  thread_foreach (func, NULL); /*Check if any threads need to wake up */
   thread_tick ();
+}
+
+/* Check if this thread should be woken up. If so,
+   place it on the ready_list. */
+void
+thread_check_timer (struct thread *t, void * randomArg UNUSED)
+{
+  if (t->wakeAtTick != 0 && t->wakeAtTick <= ticks) {
+    t->wakeAtTick = 0;
+    thread_unblock (t);
+  }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
