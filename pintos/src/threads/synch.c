@@ -210,8 +210,6 @@ lock_acquire (struct lock *lock)
   // Give donation when waiting for a lock
   enum intr_level old_level = intr_disable();
   donate_to_holder (current);
-  intr_set_level(old_level);
-
   sema_down (&lock->semaphore);
   current->waitingForThisLock = NULL;
   lock->holder = current;
@@ -220,7 +218,6 @@ lock_acquire (struct lock *lock)
   list_push_back(&(current->locks), &(lock->list_elem));
 
   // Set thread priority and accept donations.
-  old_level = intr_disable();
   accept_from_waiters (current);
   intr_set_level(old_level);
 

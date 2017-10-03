@@ -36,6 +36,7 @@ bool compare_waiters (const struct list_elem *,
                       const struct list_elem *,
                       void *);
 void accept_from_waiters (struct thread *);
+void donate_to_holder (struct thread *);
 
 /* Condition variable. */
 struct condition
