@@ -94,6 +94,8 @@ struct thread
     int wakeAtTick;                     /* Keep track of when this thread should wake up */
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    int base_priority;                  /* The base priority. */
+    struct list locks;                  /* A list of locks it has. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -102,11 +104,6 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-
-    int base_priority;                  /* The base priority. */
-
-    struct list *locks;                  /* A list of locks it has. */
-
   };
 
 /* If false (default), use round-robin scheduler.

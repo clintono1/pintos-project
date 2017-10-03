@@ -201,7 +201,7 @@ lock_acquire (struct lock *lock)
   struct thread *current = thread_current();
   lock->holder = current;
   /* Adds the lock to the threads list of locks when it acquires it */
-  list_push_back(current->locks, &(lock->list_elem));
+  list_push_back(&(current->locks), &(lock->list_elem));
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -222,7 +222,7 @@ lock_try_acquire (struct lock *lock)
   if (success) {
     struct thread *current = thread_current();
     lock->holder = current;
-    list_push_back(current->locks, &(lock->list_elem));
+    list_push_back(&(current->locks), &(lock->list_elem));
   }
   return success;
 }
@@ -241,7 +241,7 @@ lock_release (struct lock *lock)
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 
-  /* Take lock out of thread's locks list, and updates the 
+  /* Take lock out of thread's locks list, and updates the
      thread's priority. */
   struct thread *current = thread_current();
   list_remove(&(lock->list_elem));
