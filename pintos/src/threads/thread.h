@@ -102,6 +102,11 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    int base_priority;                  /* The base priority. */
+
+    struct list *locks;                  /* A list of locks it has. */
+
   };
 
 /* If false (default), use round-robin scheduler.
