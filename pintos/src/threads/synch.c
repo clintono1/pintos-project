@@ -31,6 +31,7 @@
 #include <string.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "lib/kernel/list.h"
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -248,14 +249,15 @@ accept_from_waiters (struct thread *t) {
 
   ASSERT (intr_get_level () == INTR_OFF);
 
-  int maxPriority = t->priority;
+  int maxPriority = t->base_priority;
+  list_less_func *comparison = &compare_waiters;
   for (e = list_begin (&t->locks); e != list_end (&t->locks);
        e = list_next (e))
     {
       struct lock *lock = list_entry (e, struct lock, list_elem);
       struct list_elem *maxElem = list_max(&(lock->semaphore.waiters),
-                                         &compare_waiters,
-                                         NULL);
+                                           comparison,
+                                           NULL);
       struct thread *highestPriorityThread = list_entry(maxElem, struct thread, elem);
       maxPriority = MAX(maxPriority, highestPriorityThread->priority);
     }
@@ -266,7 +268,7 @@ accept_from_waiters (struct thread *t) {
 // Used in list_max to compare waiters' priorities
 bool compare_waiters (const struct list_elem *a,
                       const struct list_elem *b,
-                      void *aux) {
+                      void *aux UNUSED) {
   struct thread *t1 = list_entry(a, struct thread, elem);
   struct thread *t2 = list_entry(b, struct thread, elem);
   return t1->priority < t2->priority;
@@ -317,7 +319,6 @@ lock_release (struct lock *lock)
   struct thread *current = thread_current();
   list_remove(&(lock->list_elem));
   /* TODO: update priority */
-  current->priority = current->base_priority;
   enum intr_level old_level = intr_disable();
   accept_from_waiters(current);
   intr_set_level(old_level);
