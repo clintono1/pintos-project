@@ -58,10 +58,10 @@ interrupts to be disabled, so there will not be a race condition there either.
 ## Rationale
 
 This is better than using a lock or a semaphore because that would require an
-additional synchronization variable. We can directly use thread_block() so we
+additional synchronization variable. We can directly use `thread_block()` so we
 do not have to deal with the extra overhead of using a synchronization variable.
 The only way that we could think of unblocking the sleeping thread was to
-access the threads in `timer_interrupt()` through the `all_list` variabe.
+access the threads in `timer_interrupt()` through the `all_list` variable.
 However, this would require us to look through all the threads to determine
 whether or not they were sleeping. It would be faster to keep a list that keeps
 track of all the blocked threads.
@@ -70,7 +70,7 @@ track of all the blocked threads.
 
 ## Data structures and functions
 
-We will edit the lock struct so that it now contains two more variables.
+We will edit the lock struct so that it now contains one more variable.
 
 ```
 struct lock
@@ -83,26 +83,28 @@ struct lock
 
 We need this variable because we need to keep track of the highest priority thread
 waiting and then change the holder of this lock to have this priority if it is higher.
-We will also modify the `sema_down` function so that it sets the priority of the lock's holder
+We will also modify the `lock_acquire` function so that it sets the priority of the lock's holder
 (if there is one), to a higher priority of the current thread has a
 higher priority. We'll also edit the `next_thread_to_run` function so that
 it returns the thread with the highest priority. We must also modify `timer_interrupt()`
 so that we yield if our effective priority is no longer the highest.
-Lastly, we'll need a new function `getEffectivePriority` that returns the
-effective priority of the current thread.
+Lastly, we'll change `thread_get_priority` so that it returns the effective priority of the
+current thread.
 
 ## Algorithms
 
 ### Choosing the next thread to run
 We can iterate through `all_list` and find the thread with the highest priority.
 This will be implemented in `next_thread_to_run` by simply iterating through the list
-and keeping track of the max priority thread and runs in O(n) time.
+and keeping track of the max priority thread and runs in O(n) time. When a thread no longer 
+has the highest effective priority (it calls `thread_set_priority()` with a low value or releases 
+a lock), we will call `thread_yield` to make sure we run the highest priority thread next (which
+may still be the same thread). 
 
 ### Acquiring a lock:
 When a function acquires a lock, it will call `lock_acquire`. At this point, it
 should update the `highestPriorityWaiting` instance variable of the lock if
-it is higher than the current value. The `lock_aquire` function calls `sema_down`,
-so it should update the lock's donation properly.
+it is higher than the current value, which should update the lock's donation properly.
 
 ### Releasing a Lock:
 Before releasing the lock, we will set the `highestPriorityWaiting` variable of
@@ -110,30 +112,27 @@ the lock to 0. Then, we have to update the priority of the current thread
 with its effective priority.
 
 ### Computing the Effective Priority:
-Inside `getEffectivePriority`, we can iterate through all the locks and
+Inside `thread_get_priority`, we can iterate through all the locks and
 see if the current thread is a holder of any of them. If so, we set the priority
 of the thread to the maximum `highestPriorityWaiting` of all the threads.
 
 ### Priority Scheduling for Semaphores, Locks, and Condition Variables:
-All of the steps above should apply to semaphores and since locks call
-semaphore methods internally, it should apply to locks as well. The only thing
-we would have to change for semaphores is that if a thread is waiting to down
-a semaphore, all current holders of the semaphore should have their priority
-raised to the highest priority waiter. In condition variables, we will
-have to set the priority of the holder to match the waiter with the highest priority.
+All of the steps above should apply to locks. However, we don't want to implement priority 
+donation for semaphores and condition variables. Whenever we release a resource, we will
+iterate through `block_list` (the list of blocked threads we created in part 1) and find
+the highest priority thread that is waiting for that resource and unblock it.
 
 ### Changing Thread's Priority:
 The thread's priority should be changed at the beginning of `timer_interrupt()`.
 It should get its priority changed to its effective priority.
 
-
 ## Synchronization
 The only global variables we access are the the synchronization primatives. One
-situation of a race conditioning happening is if two threads try to set
-a synchronization primative's `highestPriorityWaiting variable at the same time.
+situation of a race condition happening is if two threads try to set
+a synchronization primative's `highestPriorityWaiting` variable at the same time.
 Then, it becomes possible that both threads see a value of 0 and try to set it to
 their own priority and then the lower priority may end up as the final value. In order
-to prevent this, we set this priority inside the `sema_down` function after interrupts
+to prevent this, we set this priority inside the `lock_acquire` function after interrupts
 are disabled. This way, one thread cannot access the value until the other thread
 is done modifying this value.
 
@@ -158,30 +157,74 @@ is used in the `recent_cpu` formula.
 Note that we compute these above variables based on the formulas given in the
 project specs.
 
+We also will need a static variable `ready_threads_pq` pointing to a priority queue
+to hold all the ready threads in order of priority.
+
 ## Algorithms
 
-We can calculate the priority of each thread in the priority queues (do not
-update threads that are blocked). We do this every 4th tick in `timer_interrupt`.
-We do this by calling `thread_get_recentcpu()` and `thread_get_load_avg()` and
-returning the value of the formula given in the specs. We do this only if the
-boolean variable `thread_mlfqs` is `true`, otherwise we use the scheduler
-implemented in part 2. When we recalculate the priorities, we now have to place
-the threads in the appropriate queues based on their new priorities. We iterate
-through all the threads again to place them in the corresponding queue.
+We keep track of all the ready threads and their priorities in one priority queue.
+We update all the priorities (not including the threads that are blocked). We do this 
+every 4th tick in `timer_interrupt()` by calling `thread_get_recentcpu()` and 
+`thread_get_load_avg()` and returning the value of the formula given in the specs. This 
+type of scheduling only occurs when the boolean variable `thread_mlfqs` is `true`, 
+otherwise we use the scheduler implemented in part 2. When we recalculate the priorities, 
+the order of the priority queue automatically changes. We update `load_avg`, `recent_cpu_coeff`
+and `recent_cpu_coeff` every second in the same `timer_interrupt()` function. When we 
+calculate `recent_cpu`, we are sure to calculate `recent_cpu_coeff` first in order to avoid 
+overflow problems, then multiple it by `recent_cpu` in the formula.
 
 ## Synchronization
+
+There should be no synchronization issues for this part of the project. This is because 
+every time we access the global variables (`load_avg`, `recent_cpu_coeff`, and `ready_threads_pq`),
+we are in the middle of an interrupt, so no other threads can access them at the same time.	
+Since we are accessing shared data in only `timer_interrupt()` we do not have to worry about
+race conditions.
 
 ## Rationale
 
 The formulas for calculating each priority were given and we're simply putting
-it to code.
+it to code. We chose to use one priority queue over 64 queues because the order will 
+still remain the same. This reduces the space complexity by eliminating the empty queues.
+However, by doing this, we have a very long priority queue, and there may be a better solution
+to how we store the ready threads.
 
 
 
 # Additional Questions
 
 ## 1. Priority Donations Not Taken into Account
+```
+*/ PSEUDOCODE: Creates three threads. The thread of medium priority is active.
+When a thread of higher priority is waiting on a thread of lower priority, the
+thread of lower priority should become the active thread. 
+Expected outcome: Assert passes. Actual outcome: Assert fails. */
 
+struct lock l;
+void* test {
+    tid_t t1;
+    tid_t t2;
+    tid_t t3;
+    lock_init(&l);
+    t1 = thread_create ("t1", 20, (thread_func *) None, void *);
+    t2 = thread_create ("t2", 42, (thread_func *) None, void *);
+    t3 = thread_create ("t3", 63, (thread_func *) None, void *);
+    if (thread_tid == t1) {
+        lock_acquire(l);
+    }
+    schedule();
+    Assert(thread_current().tid == t1);
+}
+
+thread_func t3func(void*) {
+     while (l == 0) {
+        thread_yield();
+     }
+     lock_acquire(l);
+}
+```
+    
+    
 ## 2. MLFQS Scheduler Table
 
 timer ticks | R(A) | R(B) | R(C) | P(A) | P(B) | P(C) | thread to run
@@ -197,6 +240,6 @@ timer ticks | R(A) | R(B) | R(C) | P(A) | P(B) | P(C) | thread to run
 32          | 18.66| 10.66| 2.66 | 58   | 58   | 58   | A + B + C
 36          | 20   | 12   |  4   | 58   | 58   | 58   | A + B + C
 
-## 3. Ambiquities in Scheduler Spec
+## 3. Ambiguities in Scheduler Spec
 
 When multiple threads have the same priority, it isn't clear which thread is running at time of timer tick (which would affect the recent_cpu value). In this case, we tried to imagine dividing these ticks into equal parts and incrementing recent_cpu by these values.  This is not specified in the spec so the program's intended behavior is unknown.
