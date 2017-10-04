@@ -31,6 +31,8 @@ static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 void thread_check_timer (struct thread *t, void * randomArg UNUSED);
 
+int maxPriority = 0;
+
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -175,6 +177,9 @@ timer_interrupt (struct intr_frame *args UNUSED)
   thread_action_func *func = &thread_check_timer;
   thread_foreach (func, NULL); /*Check if any threads need to wake up */
   thread_tick ();
+  if (thread_get_priority() < maxPriority) {
+    intr_yield_on_return();
+  }
 }
 
 /* Check if this thread should be woken up. If so,
