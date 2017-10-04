@@ -230,7 +230,6 @@ lock_acquire (struct lock *lock)
 void
 donate_to_holder (struct thread *cur_thread) {
   /* Chain donation */
-  // TODO: Check, maybe use priority lock instead of disable interrupts?
   struct thread *t = cur_thread;
   while (t->waiting_for_this_lock && t->waiting_for_this_lock->holder) {
     t = t->waiting_for_this_lock->holder;

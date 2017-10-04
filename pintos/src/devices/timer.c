@@ -21,7 +21,7 @@
 static int64_t ticks;
 
 /* Number of loops per timer tick.
-   Initialized by timer_calibrate(). */
+   Initialized by timer_calibrate (). */
 static unsigned loops_per_tick;
 
 static intr_handler_func timer_interrupt;
@@ -80,7 +80,7 @@ timer_ticks (void)
 }
 
 /* Returns the number of timer ticks elapsed since THEN, which
-   should be a value once returned by timer_ticks(). */
+   should be a value once returned by timer_ticks (). */
 int64_t
 timer_elapsed (int64_t then)
 {
@@ -128,7 +128,7 @@ timer_nsleep (int64_t ns)
 
    Busy waiting wastes CPU cycles, and busy waiting with
    interrupts off for the interval between timer ticks or longer
-   will cause timer ticks to be lost.  Thus, use timer_msleep()
+   will cause timer ticks to be lost.  Thus, use timer_msleep ()
    instead if interrupts are enabled. */
 void
 timer_mdelay (int64_t ms)
@@ -141,7 +141,7 @@ timer_mdelay (int64_t ms)
 
    Busy waiting wastes CPU cycles, and busy waiting with
    interrupts off for the interval between timer ticks or longer
-   will cause timer ticks to be lost.  Thus, use timer_usleep()
+   will cause timer ticks to be lost.  Thus, use timer_usleep ()
    instead if interrupts are enabled. */
 void
 timer_udelay (int64_t us)
@@ -154,7 +154,7 @@ timer_udelay (int64_t us)
 
    Busy waiting wastes CPU cycles, and busy waiting with
    interrupts off for the interval between timer ticks or longer
-   will cause timer ticks to be lost.  Thus, use timer_nsleep()
+   will cause timer ticks to be lost.  Thus, use timer_nsleep ()
    instead if interrupts are enabled.*/
 void
 timer_ndelay (int64_t ns)
@@ -177,8 +177,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
   thread_action_func *func = &thread_check_timer;
   thread_foreach (func, NULL); /*Check if any threads need to wake up */
   thread_tick ();
-  if (thread_get_priority() < maxPriority) {
-    intr_yield_on_return();
+  if (thread_get_priority () < maxPriority) {
+    intr_yield_on_return ();
   }
 }
 
@@ -242,7 +242,7 @@ real_time_sleep (int64_t num, int32_t denom)
   if (ticks > 0)
     {
       /* We're waiting for at least one full timer tick.  Use
-         timer_sleep() because it will yield the CPU to other
+         timer_sleep () because it will yield the CPU to other
          processes. */
       timer_sleep (ticks);
     }
