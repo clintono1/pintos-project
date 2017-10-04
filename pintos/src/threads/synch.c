@@ -315,11 +315,11 @@ lock_release (struct lock *lock)
 
   enum intr_level old_level = intr_disable();
   accept_from_waiters(current);
-  thread_yields_to_highest ();
-  intr_set_level(old_level);
 
   sema_up (&lock->semaphore);
   
+  thread_yields_to_highest ();
+  intr_set_level(old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false
