@@ -402,8 +402,8 @@ thread_get_load_avg (void)
   // load_avg = (59/60) × load_avg + (1/60) × (list_size(&ready_list) + not_idle);
   fixed_point_t temp = fix_scale(fix_frac(59, 60), load_avg);
   temp = fix_add(temp, fix_scale(fix_frac(59, 60), list_size(&ready_list) + not_idle));
-  load_avg = 100 * fix_trunc(temp);
-  return load_avg;
+  load_avg = fix_trunc(temp);
+  return load_avg * 100;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -511,6 +511,11 @@ is_thread (struct thread *t)
 void update_mlfqs_priority(struct thread* t, UNUSED void* aux) {
   // priority = PRI_MAX − (recent_cpu/4) − (nice × 2)
   int new_p = fix_trunc(fix_sub(fix_sub(fix_int(PRI_MAX), fix_frac(t->t_recent_cpu, 4)), fix_scale(fix_int(t->nice), 2)));
+  if (new_p > PRI_MAX) {
+    new_p = PRI_MAX;
+  } else if (new_p < PRI_MIN) {
+    new_p = PRI_MIN;
+  }
   t->priority = new_p;
 }
 
@@ -556,6 +561,9 @@ init_thread (struct thread *t, const char *name, int priority)
     list_less_func *comparison = &comparator;
     list_push_back(&priority_queue, &(t->pq_elem));
     list_sort(&priority_queue, comparison, NULL);
+    if (list_entry(list_begin(priority_queue), struct thread, elem)->priority > thread_current()->priority) {
+      thread_yield();
+    }
   }
 
   old_level = intr_disable ();
