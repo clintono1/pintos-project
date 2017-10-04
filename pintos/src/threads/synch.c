@@ -223,10 +223,10 @@ void
 donate_to_holder (struct thread *curThread) {
   /* Chain donation */
   // TODO: Check, maybe use priority lock instead of disable interrupts?
-  struct thread *t = curThread->waitingForThisLock->holder;
-  while (t) {
-    t->priority = MAX(t->priority, curThread->priority);
+  struct thread *t = curThread;
+  while (t->waitingForThisLock && t->waitingForThisLock->holder) {
     t = t->waitingForThisLock->holder;
+    t->priority = MAX(t->priority, curThread->priority);
   }
 }
 
