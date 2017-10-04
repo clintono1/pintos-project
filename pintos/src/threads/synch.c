@@ -125,6 +125,7 @@ sema_up (struct semaphore *sema)
     thread_unblock (highestPriorityThread);
   }
   sema->value++;
+  thread_yields_to_highest ();
   intr_set_level (old_level);
 }
 
@@ -403,9 +404,26 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters))
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
+  if (!list_empty (&cond->waiters)) {
+    int maxPriority = -1;
+    struct semaphore_elem *semaphore_elem;
+    struct semaphore_elem *max_semaphore_elem;
+    struct list_elem *e;
+    enum intr_level old_level = intr_disable();
+    for (e = list_begin (&cond->waiters); e != list_end (&cond->waiters);
+         e = list_next (e))
+      {
+        semaphore_elem = list_entry (e, struct semaphore_elem, elem);
+        struct thread *highestPriorityThread = get_thread_with_most_priority (&(semaphore_elem->semaphore.waiters));
+        if (highestPriorityThread->priority > maxPriority) {
+          maxPriority = highestPriorityThread->priority;
+          max_semaphore_elem = semaphore_elem;
+        }
+      }
+    list_remove(&max_semaphore_elem->elem);
+    intr_set_level(old_level);
+    sema_up(&max_semaphore_elem->semaphore);
+  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
