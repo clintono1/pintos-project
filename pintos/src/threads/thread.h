@@ -96,7 +96,7 @@ struct thread
     struct list_elem elem;              /* List element. */
     int base_priority;                  /* The base priority. */
     struct list locks;                  /* A list of locks it has. */
-    struct lock *waitingForThisLock;    /* The lock this thread is waiting for*/
+    struct lock *waiting_for_this_lock;    /* The lock this thread is waiting for*/
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
