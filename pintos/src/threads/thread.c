@@ -61,7 +61,7 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
-static int load_avg;
+static fixed_point_t load_avg;
 
 
 static void kernel_thread (thread_func *, void *aux);
@@ -398,15 +398,18 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void)
 {
+  return fix_round(fix_scale(load_avg, 100));
+}
+
+void  thread_set_load_avg (void) {
   int not_idle = 1; // 1 when running thread is not the idle thread
   if (thread_current() == idle_thread) {
     not_idle = 0;
   }
   // load_avg = (59/60) × load_avg + (1/60) × (list_size(&ready_list) + not_idle);
-  fixed_point_t temp = fix_scale(fix_frac(59, 60), load_avg);
+  fixed_point_t temp = fix_mul(fix_frac(59, 60), load_avg);
   temp = fix_add(temp, fix_scale(fix_frac(1, 60), list_size(&ready_list) + not_idle));
-  load_avg = fix_trunc(temp);
-  return load_avg * 100;
+  load_avg = temp;
 }
 
 void update_mlfqs_priority(struct thread* t, UNUSED void* aux) {
@@ -427,12 +430,17 @@ thread_get_recent_cpu (void)
 {
   /* Not yet implemented. */
   /* does load avg get updated fast enough???*/
+
+  return thread_current()->t_recent_cpu * 100;
+}
+
+void thread_set_recent_cpu (void) {
   if (timer_ticks() % TIMER_FREQ == 0) {
     struct list_elem *e;
     fixed_point_t coef;
     for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
-      coef = fix_frac(2 * load_avg, 2 * load_avg + 1);
-      struct thread* t = list_entry(e, struct thread, elem);
+      coef = fix_div(fix_scale(load_avg, 2), fix_add(fix_scale(load_avg, 2), fix_int(1)));
+      struct thread* t = list_entry(e, struct thread, allelem);
       t->t_recent_cpu = fix_trunc(fix_add(fix_scale(coef, t->t_recent_cpu), fix_int(t->nice)));
       }
   } else {
@@ -440,7 +448,6 @@ thread_get_recent_cpu (void)
       thread_current()->t_recent_cpu ++;
     }
   }
-  return thread_current()->t_recent_cpu * 100;
 }
 
 /* Yields to the highest priority thread. */
