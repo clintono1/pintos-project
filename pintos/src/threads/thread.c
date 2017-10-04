@@ -29,7 +29,7 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
-static struct list priority_queue;
+// static struct list priority_queue;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -205,8 +205,10 @@ thread_create (const char *name, int priority,
   sf->ebp = 0;
 
   /* Add to run queue. */
-  thread_unblock (t);
   enum intr_level old_level = intr_disable ();
+  thread_unblock (t);
+  list_less_func *comparison = &comparator;
+  list_sort(&ready_list, comparison, NULL);
   thread_yields_to_highest ();
   intr_set_level (old_level);
 
@@ -378,9 +380,10 @@ thread_set_nice (int nice)
   struct thread *current = thread_current ();
   current->nice = nice;
   /* TODO: UPDATE PRIORITY */
-  // if (current->priority < list_max (&priority_queue, &thread_less_priority, NULL)) {
-  //   thread_yield ();
-  // }
+  enum intr_level old_level = intr_disable();
+  update_mlfqs_priority(current, NULL);
+  thread_yields_to_highest();
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's nice value. */
@@ -401,9 +404,21 @@ thread_get_load_avg (void)
   }
   // load_avg = (59/60) × load_avg + (1/60) × (list_size(&ready_list) + not_idle);
   fixed_point_t temp = fix_scale(fix_frac(59, 60), load_avg);
-  temp = fix_add(temp, fix_scale(fix_frac(59, 60), list_size(&ready_list) + not_idle));
+  temp = fix_add(temp, fix_scale(fix_frac(1, 60), list_size(&ready_list) + not_idle));
   load_avg = fix_trunc(temp);
   return load_avg * 100;
+}
+
+void update_mlfqs_priority(struct thread* t, UNUSED void* aux) {
+  // priority = PRI_MAX − (recent_cpu/4) − (nice × 2)
+  int new_p = fix_trunc(fix_sub(fix_sub(fix_int(PRI_MAX), fix_frac(t->t_recent_cpu, 4)), fix_scale(fix_int(t->nice), 2)));
+  if (t->priority > PRI_MAX) {
+    t->priority = PRI_MAX;
+  } else if (t->priority < PRI_MIN) {
+    t->priority = PRI_MIN;
+  } else {
+    t->priority = new_p;
+  }
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -421,7 +436,7 @@ thread_get_recent_cpu (void)
       t->t_recent_cpu = fix_trunc(fix_add(fix_scale(coef, t->t_recent_cpu), fix_int(t->nice)));
       }
   } else {
-    if(thread_current() != idle_thread) {
+    if (strcmp(thread_current()->name, "idle") != 0) {
       thread_current()->t_recent_cpu ++;
     }
   }
@@ -507,17 +522,6 @@ is_thread (struct thread *t)
 {
   return t != NULL && t->magic == THREAD_MAGIC;
 }
-/*hello*/
-void update_mlfqs_priority(struct thread* t, UNUSED void* aux) {
-  // priority = PRI_MAX − (recent_cpu/4) − (nice × 2)
-  int new_p = fix_trunc(fix_sub(fix_sub(fix_int(PRI_MAX), fix_frac(t->t_recent_cpu, 4)), fix_scale(fix_int(t->nice), 2)));
-  if (new_p > PRI_MAX) {
-    new_p = PRI_MAX;
-  } else if (new_p < PRI_MIN) {
-    new_p = PRI_MIN;
-  }
-  t->priority = new_p;
-}
 
 bool comparator (const struct list_elem *a, const struct list_elem *b, UNUSED void *aux) {
   return list_entry(a, struct thread, elem)->priority < list_entry(b, struct thread, elem)->priority;
@@ -549,22 +553,19 @@ init_thread (struct thread *t, const char *name, int priority)
 
   /*VERY POSSIBLY NOT THREAD SAFE*/
   if (thread_mlfqs) {
-    struct thread *current = thread_current();
-    if (strcmp(thread_name(), "main") != 0) {
+    if (strcmp(name, "main") != 0) {
+      struct thread *current = thread_current();
       t->nice = current->nice;
       t->t_recent_cpu = current->t_recent_cpu;
     } else {
       t->nice = 0;
       t->t_recent_cpu = 0;
     }
+
+
     update_mlfqs_priority(t, NULL);
-    list_less_func *comparison = &comparator;
-    list_push_back(&priority_queue, &(t->pq_elem));
-    list_sort(&priority_queue, comparison, NULL);
-    if (list_entry(list_begin(priority_queue), struct thread, elem)->priority > thread_current()->priority) {
-      thread_yield();
-    }
   }
+
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -596,9 +597,13 @@ next_thread_to_run (void)
     return idle_thread;
   }
   else {
-    struct thread* mostPriority = get_thread_with_most_priority (&ready_list);
-    list_remove (&mostPriority->elem);
-    return mostPriority;
+    if (thread_mlfqs) {
+      return list_entry(list_pop_front(&ready_list), struct thread, elem);
+    } else {
+      struct thread *most_priority = get_thread_with_most_priority (&ready_list);
+      list_remove (&most_priority->elem);
+      return most_priority;
+    }
   }
 }
 
@@ -695,7 +700,7 @@ allocate_tid (void)
   return tid;
 }
 void sort_priority(void) {
-  list_sort(&priority_queue, &comparator, NULL);
+  list_sort(&ready_list, &comparator, NULL);
 }
 
 /* Offset of `stack' member within `struct thread'.
