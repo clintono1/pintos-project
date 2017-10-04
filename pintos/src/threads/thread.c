@@ -340,7 +340,7 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-/* Sets the current thread's base priority to NEW_PRIORITY. 
+/* Sets the current thread's base priority to NEW_PRIORITY.
    Updates its effective priority and yields if it no longer has
    the highest priority in the ready_list. */
 void
@@ -554,8 +554,8 @@ init_thread (struct thread *t, const char *name, int priority)
     }
     update_mlfqs_priority(t, NULL);
     list_less_func *comparison = &comparator;
-    list_push_back(&priority_queue, &(t->elem));
-    list_sort(&priority_queue, comparison,NULL);
+    list_push_back(&priority_queue, &(t->pq_elem));
+    list_sort(&priority_queue, comparison, NULL);
   }
 
   old_level = intr_disable ();

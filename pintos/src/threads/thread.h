@@ -94,6 +94,7 @@ struct thread
     int wakeAtTick;                     /* Keep track of when this thread should wake up */
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    struct list_elem pq_elem;           /* list elem for priority queue */
     int base_priority;                  /* The base priority. */
     struct list locks;                  /* A list of locks it has. */
     struct lock *waiting_for_this_lock;    /* The lock this thread is waiting for*/
