@@ -174,6 +174,7 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  thread_tick ();
   thread_action_func *func = &thread_check_timer;
   thread_foreach (func, NULL); /*Check if any threads need to wake up */
   if (thread_mlfqs) {
@@ -186,7 +187,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
     }
     sort_priority();
   }
-  thread_tick ();
   if (thread_get_priority () < maxPriority) {
     intr_yield_on_return ();
   }

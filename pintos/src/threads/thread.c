@@ -607,9 +607,9 @@ next_thread_to_run (void)
     return idle_thread;
   }
   else {
-    if (thread_mlfqs) {
-      return list_entry(list_pop_front(&ready_list), struct thread, elem);
-    } else {
+    //TODO: For mlfqs, the sorting isn't really working, so popping the front doesn't allow us
+    // to pass the right tests.
+    if (true) {
       struct thread *most_priority = get_thread_with_most_priority (&ready_list);
       list_remove (&most_priority->elem);
       return most_priority;
