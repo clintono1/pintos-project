@@ -439,8 +439,9 @@ thread_get_recent_cpu (void)
 
 void thread_set_recent_cpu (void) {
   if (thread_current() != idle_thread) {
-      thread_current()->t_recent_cpu = fix_add(thread_current()->t_recent_cpu, fix_int(1));
+    thread_current()->t_recent_cpu = fix_add(thread_current()->t_recent_cpu, fix_int(1));
   }
+
   if (timer_ticks() % TIMER_FREQ == 0) {
     struct list_elem *e;
     fixed_point_t coef;
@@ -623,6 +624,11 @@ get_thread_with_most_priority (struct list *list) {
   struct list_elem *max = list_max (list, comparison, NULL);
   struct thread *max_priority_thread = list_entry (max, struct thread, elem);
   return max_priority_thread;
+}
+
+struct thread *
+get_ready_thread_with_most_priority () {
+  return get_thread_with_most_priority(&ready_list);
 }
 
 /* Completes a thread switch by activating the new thread's page
