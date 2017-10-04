@@ -219,6 +219,7 @@ lock_acquire (struct lock *lock)
 
   // Set thread priority and accept donations.
   accept_from_waiters (current);
+  thread_yields_to_highest ();
   intr_set_level(old_level);
 
 }
@@ -252,10 +253,7 @@ accept_from_waiters (struct thread *t) {
        e = list_next (e))
     {
       struct lock *lock = list_entry (e, struct lock, list_elem);
-      struct list_elem *maxElem = list_max(&(lock->semaphore.waiters),
-                                           comparison,
-                                           NULL);
-      struct thread *highestPriorityThread = list_entry(maxElem, struct thread, elem);
+      struct thread *highestPriorityThread = get_thread_with_most_priority (&(lock->semaphore.waiters));
       maxPriority = MAX(maxPriority, highestPriorityThread->priority);
     }
   t->priority = maxPriority;
@@ -291,6 +289,7 @@ lock_try_acquire (struct lock *lock)
     list_push_back(&(current->locks), &(lock->list_elem));
     enum intr_level old_level = intr_disable();
     accept_from_waiters (current);
+    thread_yields_to_highest ();
     intr_set_level(old_level);
   }
   return success;
@@ -316,6 +315,7 @@ lock_release (struct lock *lock)
 
   enum intr_level old_level = intr_disable();
   accept_from_waiters(current);
+  thread_yields_to_highest ();
   intr_set_level(old_level);
 
   sema_up (&lock->semaphore);

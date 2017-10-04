@@ -200,6 +200,9 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  enum intr_level old_level = intr_disable();
+  thread_yields_to_highest ();
+  intr_set_level(old_level);
 
   return tid;
 }
@@ -338,14 +341,12 @@ void
 thread_set_priority (int new_priority)
 {
   struct thread *current = thread_current ();
+
+  enum intr_level old_level = intr_disable();
   current->base_priority = new_priority;
   accept_from_waiters (current);
-  list_less_func *comparison = &compare_threads;
-  struct list_elem *max = list_max (&ready_list, comparison, NULL);
-  struct thread *max_priority_thread = list_entry (max, struct thread, elem);
-  if (current->priority < max_priority_thread->priority) {
-    thread_yield ();
-  }
+  thread_yields_to_highest ();
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
@@ -384,6 +385,16 @@ thread_get_recent_cpu (void)
 {
   /* Not yet implemented. */
   return 0;
+}
+
+/* Yields to the highest priority thread. */
+void
+thread_yields_to_highest (void) {
+  struct thread *current = thread_current ();
+  struct thread *max_priority_thread = get_thread_with_most_priority (&ready_list);
+  if (current->priority < max_priority_thread->priority) {
+    thread_yield ();
+  }
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -507,28 +518,20 @@ next_thread_to_run (void)
     return idle_thread;
   }
   else {
-    struct thread* mostPriority = get_thread_with_most_priority();
+    struct thread* mostPriority = get_thread_with_most_priority (&ready_list);
     list_remove(&(mostPriority->elem));
     return mostPriority;
   }
 }
 
 struct thread *
-get_thread_with_most_priority (void) {
-  struct list_elem *e;
-
+get_thread_with_most_priority (struct list *list) {
   ASSERT (intr_get_level () == INTR_OFF);
-  struct thread *mostPriority = NULL;
-  struct thread *t;
-  for (e = list_begin (&ready_list); e != list_end (&ready_list);
-       e = list_next (e))
-    {
-      t = list_entry (e, struct thread, elem);
-      if (!mostPriority || mostPriority->priority < t->priority) {
-        mostPriority = t;
-      }
-    }
-  return mostPriority;
+
+  list_less_func *comparison = &compare_threads;
+  struct list_elem *max = list_max (list, comparison, NULL);
+  struct thread *max_priority_thread = list_entry (max, struct thread, elem);
+  return max_priority_thread;
 }
 
 /* Completes a thread switch by activating the new thread's page
