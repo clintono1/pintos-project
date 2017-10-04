@@ -104,7 +104,7 @@ sema_try_down (struct semaphore *sema)
 }
 
 /* Up or "V" operation on a semaphore.  Increments SEMA's value
-   and wakes up one thread of those waiting for SEMA, if any.
+   and wakes up the highest priority thread of those waiting for SEMA, if any.
 
    This function may be called from an interrupt handler. */
 void
@@ -115,9 +115,15 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters))
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+  if (!list_empty (&sema->waiters)) {
+    list_less_func *comparison = &compare_threads;
+    struct list_elem *maxElem = list_max(&(sema->waiters),
+                                           comparison,
+                                           NULL);
+    struct thread *highestPriorityThread = list_entry(maxElem, struct thread, elem);
+    list_remove (maxElem);
+    thread_unblock (highestPriorityThread);
+  }
   sema->value++;
   intr_set_level (old_level);
 }
@@ -241,7 +247,7 @@ accept_from_waiters (struct thread *t) {
   ASSERT (intr_get_level () == INTR_OFF);
 
   int maxPriority = t->base_priority;
-  list_less_func *comparison = &compare_waiters;
+  list_less_func *comparison = &compare_threads;
   for (e = list_begin (&t->locks); e != list_end (&t->locks);
        e = list_next (e))
     {
@@ -256,7 +262,7 @@ accept_from_waiters (struct thread *t) {
 }
 
 // Used in list_max to compare waiters' priorities
-bool compare_waiters (const struct list_elem *a,
+bool compare_threads (const struct list_elem *a,
                       const struct list_elem *b,
                       void *aux UNUSED) {
   struct thread *t1 = list_entry(a, struct thread, elem);
@@ -302,16 +308,18 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
   lock->holder = NULL;
-  sema_up (&lock->semaphore);
 
   /* Take lock out of thread's locks list, and updates the
      thread's priority. */
   struct thread *current = thread_current();
   list_remove(&(lock->list_elem));
-  /* TODO: update priority */
+
   enum intr_level old_level = intr_disable();
   accept_from_waiters(current);
   intr_set_level(old_level);
+
+  sema_up (&lock->semaphore);
+  
 }
 
 /* Returns true if the current thread holds LOCK, false

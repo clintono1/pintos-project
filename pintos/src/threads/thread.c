@@ -331,11 +331,21 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
+/* Sets the current thread's base priority to NEW_PRIORITY. 
+   Updates its effective priority and yields if it no longer has
+   the highest priority in the ready_list. */
 void
 thread_set_priority (int new_priority)
 {
-  thread_current ()->priority = new_priority;
+  struct thread *current = thread_current ();
+  current->base_priority = new_priority;
+  accept_from_waiters (current);
+  list_less_func *comparison = &compare_threads;
+  struct list_elem *max = list_max (&ready_list, comparison, NULL);
+  struct thread *max_priority_thread = list_entry (max, struct thread, elem);
+  if (current->priority < max_priority_thread->priority) {
+    thread_yield ();
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -509,10 +519,11 @@ get_thread_with_most_priority (void) {
 
   ASSERT (intr_get_level () == INTR_OFF);
   struct thread *mostPriority = NULL;
+  struct thread *t;
   for (e = list_begin (&ready_list); e != list_end (&ready_list);
        e = list_next (e))
     {
-      struct thread *t = list_entry (e, struct thread, elem);
+      t = list_entry (e, struct thread, elem);
       if (!mostPriority || mostPriority->priority < t->priority) {
         mostPriority = t;
       }
