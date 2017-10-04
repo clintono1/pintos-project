@@ -714,7 +714,7 @@ allocate_tid (void)
   return tid;
 }
 void sort_priority(void) {
-  list_sort(&ready_list, &comparator, NULL);
+  // list_sort(&ready_list, &comparator, NULL);
 }
 
 /* Offset of `stack' member within `struct thread'.
