@@ -321,8 +321,8 @@ lock_release (struct lock *lock)
 
   enum intr_level old_level;
   if (!thread_mlfqs) {
-    old_level = intr_disable();
-    accept_from_waiters(current);
+    old_level = intr_disable ();
+    accept_from_waiters (current);
   }
 
   sema_up (&lock->semaphore);
