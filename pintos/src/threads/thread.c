@@ -28,6 +28,8 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+static struct list priority_queue;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -345,19 +347,32 @@ thread_get_priority (void)
   return thread_current ()->priority;
 }
 
+/* Returns true if the thread at list_elem a has a lower priority than
+   the thread at list_elem b. */
+bool
+thread_less_priority (struct list_elem *a, struct list_elem *b, void *aux) {
+  struct thread *thread_a = list_entry (a, struct thread, elem);
+  struct thread *thread_b = list_entry (b, struct thread, elem);
+  return thread_a->priority < thread_b->priority;
+}
+
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED)
+thread_set_nice (int nice)
 {
-  /* Not yet implemented. */
+  struct thread *current = thread_current ();
+  current->nice = nice;
+  /* TODO: UPDATE PRIORITY */
+  if (current->priority < list_max (&priority_queue, &thread_less_priority, NULL)) {
+    thread_yield ();
+  }
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void)
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current ()->nice;
 }
 
 /* Returns 100 times the system load average. */
@@ -466,6 +481,17 @@ init_thread (struct thread *t, const char *name, int priority)
   t->waitingForThisLock = NULL;
   list_init(&(t->locks));
   t->magic = THREAD_MAGIC;
+
+  /* Initializes the niceness factor of the thread if using the multi
+     level feedback queue system. */
+  if (thread_mlfqs) {
+    struct thread *current = thread_current();
+    if (current) {
+      t->nice = current->nice;
+    } else {
+      t->nice = 0;
+    }
+  }
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
