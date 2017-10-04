@@ -416,7 +416,9 @@ void  thread_set_load_avg (void) {
 
 void update_mlfqs_priority(struct thread* t, UNUSED void* aux) {
   // priority = PRI_MAX − (recent_cpu/4) − (nice × 2)
-  int new_p = fix_trunc(fix_sub(fix_sub(fix_int(PRI_MAX), fix_frac(t->t_recent_cpu, 4)), fix_scale(fix_int(t->nice), 2)));
+  int new_p = fix_trunc(fix_sub(fix_sub(fix_int(PRI_MAX),
+                                        fix_div(t->t_recent_cpu, fix_int(4))),
+                                fix_scale(fix_int(t->nice), 2)));
   if (t->priority > PRI_MAX) {
     t->priority = PRI_MAX;
   } else if (t->priority < PRI_MIN) {
@@ -433,12 +435,12 @@ thread_get_recent_cpu (void)
   /* Not yet implemented. */
   /* does load avg get updated fast enough???*/
 
-  return thread_current()->t_recent_cpu * 100;
+  return fix_round(fix_scale(thread_current()->t_recent_cpu, 100));
 }
 
 void thread_set_recent_cpu (void) {
   if (strcmp(thread_current()->name, "idle") != 0) {
-      thread_current()->t_recent_cpu ++;
+      thread_current()->t_recent_cpu = fix_add(thread_current()->t_recent_cpu, fix_int(1));
   }
   if (timer_ticks() % TIMER_FREQ == 0) {
     struct list_elem *e;
@@ -446,7 +448,7 @@ void thread_set_recent_cpu (void) {
     for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
       coef = fix_div(fix_scale(load_avg, 2), fix_add(fix_scale(load_avg, 2), fix_int(1)));
       struct thread* t = list_entry(e, struct thread, allelem);
-      t->t_recent_cpu = fix_trunc(fix_add(fix_scale(coef, t->t_recent_cpu), fix_int(t->nice)));
+      t->t_recent_cpu = fix_add(fix_mul(coef, t->t_recent_cpu), fix_int(t->nice));
       }
   }
 }
@@ -567,7 +569,7 @@ init_thread (struct thread *t, const char *name, int priority)
       t->t_recent_cpu = current->t_recent_cpu;
     } else {
       t->nice = 0;
-      t->t_recent_cpu = 0;
+      t->t_recent_cpu = fix_int(0);
     }
 
 

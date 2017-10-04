@@ -98,7 +98,7 @@ struct thread
     int base_priority;                  /* The base priority. */
     struct list locks;                  /* A list of locks it has. */
     struct lock *waiting_for_this_lock;    /* The lock this thread is waiting for*/
-    int t_recent_cpu;
+    fixed_point_t t_recent_cpu;
     int nice;                           /* Niceness factor. */
     // struct fixed_point_t recent_cpu;    /* Amount of CPU time the thread has received. */
 
