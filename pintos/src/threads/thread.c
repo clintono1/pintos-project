@@ -58,6 +58,8 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
+static load_avg;
+
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -70,6 +72,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -361,11 +364,19 @@ thread_get_nice (void)
 }
 
 /* Returns 100 times the system load average. */
+/* NOT SURE IF LIST_SIZE or LIST SIZE PLUS 1*/
 int
 thread_get_load_avg (void)
 {
-  /* Not yet implemented. */
-  return 0;
+  int not_idle = 1; // 1 when running thread is not the idle thread
+  if (thread_current() == idle_thread) {
+    not_idle = 0;
+  }
+  // load_avg = (59/60) × load_avg + (1/60) × (list_size(&ready_list) + not_idle);
+  fixed_point_t temp = fix_scale(fix_frac(59/60), load_avg);
+  temp = fix_add(temp, fix_scale(fix_frac(59/60), list_size(&ready_list) + not_idle));
+  load_avg = fix_trunc(temp);
+  return load_avg * 100;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -373,7 +384,20 @@ int
 thread_get_recent_cpu (void)
 {
   /* Not yet implemented. */
-  return 0;
+  /* does load avg get updated fast enough???*/
+  if (timer_ticks() % TIMER_FREQ == 0) {
+    struct list_elem *e;
+    fixed_point_t coef;
+    for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
+      coef = fix_frac(2 * load_avg, 2 * load_avg + 1);
+      e->t_recent_cpu = fix_trunc(fix_add(fix_scale(coef, fix_int(e->t_recent_cpu)), fix_int(e->nice)));
+      }
+} else {
+  if(thread_current() != idle_thread) {
+    thread_current()->t_recent_cpu ++;
+  }
+}
+  return thread_current()->t_recent_cpu * 100;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
