@@ -31,6 +31,7 @@
 #include <string.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "lib/kernel/list.h"
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -66,9 +67,10 @@ sema_down (struct semaphore *sema)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
+  struct thread *t = thread_current();
   while (sema->value == 0)
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+      list_push_back (&sema->waiters, &(t->elem));
       thread_block ();
     }
   sema->value--;
@@ -196,12 +198,71 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  sema_down (&lock->semaphore);
-
   struct thread *current = thread_current();
+  current->waitingForThisLock = lock;
+
+  // Give donation when waiting for a lock
+  enum intr_level old_level = intr_disable();
+  donate_to_holder (current);
+  sema_down (&lock->semaphore);
+  current->waitingForThisLock = NULL;
   lock->holder = current;
+
   /* Adds the lock to the threads list of locks when it acquires it */
-  list_push_back(current->locks, &(lock->list_elem));
+  list_push_back(&(current->locks), &(lock->list_elem));
+
+  // Set thread priority and accept donations.
+  accept_from_waiters (current);
+  intr_set_level(old_level);
+
+}
+
+/* Makes the current thread donate to the current holder of
+   whatever lock it is waiting for. This also implements chain donation. */
+void
+donate_to_holder (struct thread *curThread) {
+  /* Chain donation */
+  // TODO: Check, maybe use priority lock instead of disable interrupts?
+  struct thread *t = curThread->waitingForThisLock->holder;
+  while (t) {
+    t->priority = MAX(t->priority, curThread->priority);
+    t = t->waitingForThisLock->holder;
+  }
+}
+
+/* Changes a threads priority to the max of the lock's waiters' priority.
+   This is to cover the case where a lock is passed to another thread
+   and the new holder needs its priority updated. It also allows a thread
+   to update its priority after releasing a lock. */
+void
+accept_from_waiters (struct thread *t) {
+  struct list_elem *e;
+
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  int maxPriority = t->base_priority;
+  list_less_func *comparison = &compare_waiters;
+  for (e = list_begin (&t->locks); e != list_end (&t->locks);
+       e = list_next (e))
+    {
+      struct lock *lock = list_entry (e, struct lock, list_elem);
+      struct list_elem *maxElem = list_max(&(lock->semaphore.waiters),
+                                           comparison,
+                                           NULL);
+      struct thread *highestPriorityThread = list_entry(maxElem, struct thread, elem);
+      maxPriority = MAX(maxPriority, highestPriorityThread->priority);
+    }
+  t->priority = maxPriority;
+
+}
+
+// Used in list_max to compare waiters' priorities
+bool compare_waiters (const struct list_elem *a,
+                      const struct list_elem *b,
+                      void *aux UNUSED) {
+  struct thread *t1 = list_entry(a, struct thread, elem);
+  struct thread *t2 = list_entry(b, struct thread, elem);
+  return t1->priority < t2->priority;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -222,7 +283,10 @@ lock_try_acquire (struct lock *lock)
   if (success) {
     struct thread *current = thread_current();
     lock->holder = current;
-    list_push_back(current->locks, &(lock->list_elem));
+    list_push_back(&(current->locks), &(lock->list_elem));
+    enum intr_level old_level = intr_disable();
+    accept_from_waiters (current);
+    intr_set_level(old_level);
   }
   return success;
 }
@@ -241,11 +305,14 @@ lock_release (struct lock *lock)
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 
-  /* Take lock out of thread's locks list, and updates the 
+  /* Take lock out of thread's locks list, and updates the
      thread's priority. */
   struct thread *current = thread_current();
   list_remove(&(lock->list_elem));
-  /* TODO: update prioroity */
+  /* TODO: update priority */
+  enum intr_level old_level = intr_disable();
+  accept_from_waiters(current);
+  intr_set_level(old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false
