@@ -352,7 +352,9 @@ thread_set_priority (int new_priority)
 
   enum intr_level old_level = intr_disable ();
   current->base_priority = new_priority;
-  accept_from_waiters (current);
+  if (!thread_mlfqs) {
+    accept_from_waiters (current);
+  }
   thread_yields_to_highest ();
   intr_set_level (old_level);
 }
@@ -435,6 +437,9 @@ thread_get_recent_cpu (void)
 }
 
 void thread_set_recent_cpu (void) {
+  if (strcmp(thread_current()->name, "idle") != 0) {
+      thread_current()->t_recent_cpu ++;
+  }
   if (timer_ticks() % TIMER_FREQ == 0) {
     struct list_elem *e;
     fixed_point_t coef;
@@ -443,10 +448,6 @@ void thread_set_recent_cpu (void) {
       struct thread* t = list_entry(e, struct thread, allelem);
       t->t_recent_cpu = fix_trunc(fix_add(fix_scale(coef, t->t_recent_cpu), fix_int(t->nice)));
       }
-  } else {
-    if (strcmp(thread_current()->name, "idle") != 0) {
-      thread_current()->t_recent_cpu ++;
-    }
   }
 }
 
