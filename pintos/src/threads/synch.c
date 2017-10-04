@@ -73,12 +73,6 @@ sema_down (struct semaphore *sema)
       list_push_back (&sema->waiters, &(t->elem));
       thread_block ();
     }
-  // Remove thread from waiters list. This is only needed when semaphore
-  // is initialized with a positive value, so when you down, the current thread
-  // doesn't stay on the waiters list.
-  if (is_interior(&(t->elem))) {
-    list_remove(&(t->elem));
-  }
   sema->value--;
   intr_set_level (old_level);
 }

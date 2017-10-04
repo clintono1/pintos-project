@@ -98,6 +98,8 @@ struct thread
     struct list locks;                  /* A list of locks it has. */
     struct lock *waitingForThisLock;    /* The lock this thread is waiting for*/
     int recent_cpu;
+    int nice;                           /* Niceness factor. */
+    // struct fixed_point_t recent_cpu;    /* Amount of CPU time the thread has received. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
