@@ -384,7 +384,7 @@ thread_set_nice (int nice)
   /* TODO: UPDATE PRIORITY */
   enum intr_level old_level = intr_disable();
   update_mlfqs_priority(current, NULL);
-  thread_yields_to_highest();
+  thread_yield ();
   intr_set_level(old_level);
 }
 
@@ -450,16 +450,6 @@ void thread_set_recent_cpu (void) {
       struct thread* t = list_entry(e, struct thread, allelem);
       t->t_recent_cpu = fix_add(fix_mul(coef, t->t_recent_cpu), fix_int(t->nice));
       }
-  }
-}
-
-/* Yields to the highest priority thread. */
-void
-thread_yields_to_highest (void) {
-  struct thread *current = thread_current ();
-  struct thread *max_priority_thread = get_thread_with_most_priority (&ready_list);
-  if (current->priority < max_priority_thread->priority) {
-    thread_yield ();
   }
 }
 
@@ -571,8 +561,8 @@ init_thread (struct thread *t, const char *name, int priority)
       t->nice = 0;
       t->t_recent_cpu = fix_int(0);
     }
-
     update_mlfqs_priority(t, NULL);
+
   }
 
 
@@ -608,11 +598,9 @@ next_thread_to_run (void)
   else {
     //TODO: For mlfqs, the sorting isn't really working, so popping the front doesn't allow us
     // to pass the right tests.
-    if (true) {
-      struct thread *most_priority = get_thread_with_most_priority (&ready_list);
-      list_remove (&most_priority->elem);
-      return most_priority;
-    }
+    struct thread *most_priority = get_thread_with_most_priority (&ready_list);
+    list_remove (&most_priority->elem);
+    return most_priority;
   }
 }
 
@@ -712,9 +700,6 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
-}
-void sort_priority(void) {
-  // list_sort(&ready_list, &comparator, NULL);
 }
 
 /* Offset of `stack' member within `struct thread'.

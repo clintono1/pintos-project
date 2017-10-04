@@ -150,7 +150,6 @@ int thread_get_load_avg (void);
 void thread_set_load_avg (void);
 void update_mlfqs_priority(struct thread *, void* aux);
 bool comparator (const struct list_elem *a, const struct list_elem *b, void *aux);
-void sort_priority (void);
 struct thread *get_thread_with_most_priority (struct list *);
 struct thread *get_ready_thread_with_most_priority ();
 

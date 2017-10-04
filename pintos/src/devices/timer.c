@@ -31,8 +31,6 @@ static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 void thread_check_timer (struct thread *t, void * randomArg UNUSED);
 
-int maxPriority = 0;
-
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -185,7 +183,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
     if (ticks % 4 == 0) {
       thread_foreach(&update_mlfqs_priority, NULL);
     }
-    sort_priority();
   }
 }
 
