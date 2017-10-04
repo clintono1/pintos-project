@@ -209,7 +209,7 @@ thread_create (const char *name, int priority,
   thread_unblock (t);
   list_less_func *comparison = &comparator;
   list_sort(&ready_list, comparison, NULL);
-  thread_yields_to_highest ();
+  thread_yield();
   intr_set_level (old_level);
 
   return tid;
@@ -355,7 +355,7 @@ thread_set_priority (int new_priority)
   if (!thread_mlfqs) {
     accept_from_waiters (current);
   }
-  thread_yields_to_highest ();
+  thread_yield();
   intr_set_level (old_level);
 }
 

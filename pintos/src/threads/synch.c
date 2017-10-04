@@ -125,7 +125,7 @@ sema_up (struct semaphore *sema)
     thread_unblock (highest_priority_thread);
   }
   sema->value++;
-  thread_yields_to_highest ();
+  thread_yield ();
   intr_set_level (old_level);
 }
 
@@ -223,7 +223,7 @@ lock_acquire (struct lock *lock)
   // Set thread priority and accept donations.
   if (!thread_mlfqs) {
     accept_from_waiters (current);
-    thread_yields_to_highest ();
+    thread_yield ();
   }
   intr_set_level (old_level);
 
@@ -294,7 +294,7 @@ lock_try_acquire (struct lock *lock)
     if (!thread_mlfqs) {
       enum intr_level old_level = intr_disable ();
       accept_from_waiters (current);
-      thread_yields_to_highest ();
+      thread_yield ();
       intr_set_level (old_level);
     }
   }
@@ -327,10 +327,10 @@ lock_release (struct lock *lock)
 
   sema_up (&lock->semaphore);
   if (!thread_mlfqs) {
-    thread_yields_to_highest ();
+    thread_yield ();
     intr_set_level (old_level);
   }
-  
+
 }
 
 /* Returns true if the current thread holds LOCK, false
