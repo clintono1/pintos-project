@@ -253,7 +253,6 @@ accept_from_waiters (struct thread *t) {
       maxPriority = MAX(maxPriority, highestPriorityThread->priority);
     }
   t->priority = maxPriority;
-
 }
 
 // Used in list_max to compare waiters' priorities
