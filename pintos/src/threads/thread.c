@@ -396,7 +396,6 @@ thread_get_nice (void)
 }
 
 /* Returns 100 times the system load average. */
-/* NOT SURE IF LIST_SIZE or LIST SIZE PLUS 1*/
 int
 thread_get_load_avg (void)
 {
@@ -439,7 +438,7 @@ thread_get_recent_cpu (void)
 }
 
 void thread_set_recent_cpu (void) {
-  if (strcmp(thread_current()->name, "idle") != 0) {
+  if (thread_current() != idle_thread) {
       thread_current()->t_recent_cpu = fix_add(thread_current()->t_recent_cpu, fix_int(1));
   }
   if (timer_ticks() % TIMER_FREQ == 0) {
@@ -571,7 +570,6 @@ init_thread (struct thread *t, const char *name, int priority)
       t->nice = 0;
       t->t_recent_cpu = fix_int(0);
     }
-
 
     update_mlfqs_priority(t, NULL);
   }
