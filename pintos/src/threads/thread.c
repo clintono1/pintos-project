@@ -353,12 +353,12 @@ thread_get_priority (void)
 
 /* Returns true if the thread at list_elem a has a lower priority than
    the thread at list_elem b. */
-bool
-thread_less_priority (struct list_elem *a, struct list_elem *b, void *aux) {
-  struct thread *thread_a = list_entry (a, struct thread, elem);
-  struct thread *thread_b = list_entry (b, struct thread, elem);
-  return thread_a->priority < thread_b->priority;
-}
+// bool
+// thread_less_priority (struct list_elem *a, struct list_elem *b, void *aux) {
+//   struct thread *thread_a = list_entry (a, struct thread, elem);
+//   struct thread *thread_b = list_entry (b, struct thread, elem);
+//   return thread_a->priority < thread_b->priority;
+// }
 
 /* Sets the current thread's nice value to NICE. */
 void
@@ -367,9 +367,9 @@ thread_set_nice (int nice)
   struct thread *current = thread_current ();
   current->nice = nice;
   /* TODO: UPDATE PRIORITY */
-  if (current->priority < list_max (&priority_queue, &thread_less_priority, NULL)) {
-    thread_yield ();
-  }
+  // if (current->priority < list_max (&priority_queue, &thread_less_priority, NULL)) {
+  //   thread_yield ();
+  // }
 }
 
 /* Returns the current thread's nice value. */
@@ -486,15 +486,15 @@ is_thread (struct thread *t)
 {
   return t != NULL && t->magic == THREAD_MAGIC;
 }
-
+/*hello*/
 void update_mlfqs_priority(struct thread* t, UNUSED void* aux) {
   // priority = PRI_MAX − (recent_cpu/4) − (nice × 2)
   int new_p = fix_trunc(fix_sub(fix_sub(fix_int(PRI_MAX), fix_frac(t->t_recent_cpu, 4)), fix_scale(fix_int(t->nice), 2)));
-  t->base_priority = new_p;
+  t->priority = new_p;
 }
 
 bool comparator (const struct list_elem *a, const struct list_elem *b, UNUSED void *aux) {
-  return list_entry(a, struct thread, elem)->base_priority < list_entry(b, struct thread, elem)->base_priority;
+  return list_entry(a, struct thread, elem)->priority < list_entry(b, struct thread, elem)->priority;
 }
 
 /* Does basic initialization of T as a blocked thread named
@@ -532,8 +532,9 @@ init_thread (struct thread *t, const char *name, int priority)
       t->t_recent_cpu = 0;
     }
     update_mlfqs_priority(t, NULL);
+    list_less_func *comparison = &comparator;
     list_push_back(&priority_queue, &(t->elem));
-    list_sort(&priority_queue, &comparator,NULL);
+    list_sort(&priority_queue, comparison,NULL);
   }
 
   old_level = intr_disable ();
