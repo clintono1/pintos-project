@@ -97,7 +97,7 @@ struct thread
     int base_priority;                  /* The base priority. */
     struct list locks;                  /* A list of locks it has. */
     struct lock *waitingForThisLock;    /* The lock this thread is waiting for*/
-    int recent_cpu;
+    int t_recent_cpu;
     int nice;                           /* Niceness factor. */
     // struct fixed_point_t recent_cpu;    /* Amount of CPU time the thread has received. */
 
@@ -145,5 +145,8 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+void update_mlfqs_priority(struct thread *, void* aux);
+bool comparator (const struct list_elem *a, const struct list_elem *b, void *aux);
+void sort_priority(void);
 
 #endif /* threads/thread.h */

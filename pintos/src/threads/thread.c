@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -60,7 +61,7 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
-static load_avg;
+static int load_avg;
 
 
 static void kernel_thread (thread_func *, void *aux);
@@ -388,10 +389,10 @@ thread_get_load_avg (void)
     not_idle = 0;
   }
   // load_avg = (59/60) × load_avg + (1/60) × (list_size(&ready_list) + not_idle);
-  fixed_point_t temp = fix_scale(fix_frac(59/60), load_avg);
-  temp = fix_add(temp, fix_scale(fix_frac(59/60), list_size(&ready_list) + not_idle));
-  load_avg = fix_trunc(temp);
-  return load_avg * 100;
+  fixed_point_t temp = fix_scale(fix_frac(59, 60), load_avg);
+  temp = fix_add(temp, fix_scale(fix_frac(59, 60), list_size(&ready_list) + not_idle));
+  load_avg = 100 * fix_trunc(temp);
+  return load_avg;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -405,13 +406,14 @@ thread_get_recent_cpu (void)
     fixed_point_t coef;
     for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
       coef = fix_frac(2 * load_avg, 2 * load_avg + 1);
-      e->t_recent_cpu = fix_trunc(fix_add(fix_scale(coef, fix_int(e->t_recent_cpu)), fix_int(e->nice)));
+      struct thread* t = list_entry(e, struct thread, elem);
+      t->t_recent_cpu = fix_trunc(fix_add(fix_scale(coef, t->t_recent_cpu), fix_int(t->nice)));
       }
-} else {
-  if(thread_current() != idle_thread) {
-    thread_current()->t_recent_cpu ++;
+  } else {
+    if(thread_current() != idle_thread) {
+      thread_current()->t_recent_cpu ++;
+    }
   }
-}
   return thread_current()->t_recent_cpu * 100;
 }
 
@@ -485,6 +487,16 @@ is_thread (struct thread *t)
   return t != NULL && t->magic == THREAD_MAGIC;
 }
 
+void update_mlfqs_priority(struct thread* t, UNUSED void* aux) {
+  // priority = PRI_MAX − (recent_cpu/4) − (nice × 2)
+  int new_p = fix_trunc(fix_sub(fix_sub(fix_int(PRI_MAX), fix_frac(t->t_recent_cpu, 4)), fix_scale(fix_int(t->nice), 2)));
+  t->base_priority = new_p;
+}
+
+bool comparator (const struct list_elem *a, const struct list_elem *b, UNUSED void *aux) {
+  return list_entry(a, struct thread, elem)->base_priority < list_entry(b, struct thread, elem)->base_priority;
+}
+
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
@@ -506,15 +518,22 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&(t->locks));
   t->magic = THREAD_MAGIC;
 
-  /* Initializes the niceness factor of the thread if using the multi
-     level feedback queue system. */
+  /* Initializes the niceness factor and recent cpu value of the thread
+  if using the multilevel feedback queue system. */
+
+  /*VERY POSSIBLY NOT THREAD SAFE*/
   if (thread_mlfqs) {
     struct thread *current = thread_current();
-    if (current) {
+    if (strcmp(thread_name(), "main") != 0) {
       t->nice = current->nice;
+      t->t_recent_cpu = current->t_recent_cpu;
     } else {
       t->nice = 0;
+      t->t_recent_cpu = 0;
     }
+    update_mlfqs_priority(t, NULL);
+    list_push_back(&priority_queue, &(t->elem));
+    list_sort(&priority_queue, &comparator,NULL);
   }
 
   old_level = intr_disable ();
@@ -630,6 +649,9 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+void sort_priority(void) {
+  list_sort(&priority_queue, &comparator, NULL);
 }
 
 /* Offset of `stack' member within `struct thread'.

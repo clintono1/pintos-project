@@ -174,6 +174,14 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_action_func *func = &thread_check_timer;
   thread_foreach (func, NULL); /*Check if any threads need to wake up */
+  if (ticks % TIMER_FREQ == 0) {
+    thread_get_load_avg();
+  }
+  thread_get_recent_cpu();
+  if (ticks % 4 == 0) {
+    thread_foreach(&update_mlfqs_priority, NULL);
+  }
+  sort_priority();
   thread_tick ();
 }
 
