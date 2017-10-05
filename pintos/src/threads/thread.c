@@ -426,13 +426,13 @@ thread_set_recent_cpu (void)
   if (thread_current () != idle_thread)
     thread_current ()->t_recent_cpu = fix_add (thread_current ()->t_recent_cpu, fix_int (1));
 
-  if (timer_ticks () % TIMER_FREQ == 0) 
+  if (timer_ticks () % TIMER_FREQ == 0)
     {
       struct list_elem *e;
       fixed_point_t coef;
 
-      for (e = list_begin (&all_list); e != list_end (&all_list); 
-           e = list_next (e)) 
+      for (e = list_begin (&all_list); e != list_end (&all_list);
+           e = list_next (e))
         {
           coef = fix_div (fix_scale (load_avg, 2), fix_add (fix_scale (load_avg, 2), fix_int (1)));
           struct thread* t = list_entry (e, struct thread, allelem);
@@ -537,13 +537,13 @@ init_thread (struct thread *t, const char *name, int priority)
 
   if (thread_mlfqs)
     {
-      if (strcmp (name, "main") != 0) 
+      if (strcmp (name, "main") != 0)
         {
           struct thread *current = thread_current ();
           t->nice = current->nice;
           t->t_recent_cpu = current->t_recent_cpu;
-        } 
-      else 
+        }
+      else
         {
           t->nice = 0;
           t->t_recent_cpu = fix_int (0);

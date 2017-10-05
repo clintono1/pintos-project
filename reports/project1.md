@@ -19,24 +19,67 @@ we wake up that thread.
 
 ## Part 2: Priority Scheduler
 
-In our initial implementation, we did not store the original priority, so we could not restore its priority after its donation is done. Now we have an instance variable for each thread that keeps track of its original priority (`base_priority`).
+In our initial implementation, we did not store the base priority of the thread,
+so we could not restore its priority after its donation is done. Now we have an
+instance variable (`base_priority`) in the thread struct that tracks this.
 
-Our initial implementation did not correctly account for multiple/nested donations. To counter this, we decided to utilize the `waiters` list that is an instance variable for each semaphore. Since each lock uses a semaphore, this kept track of all the threads waiting for a lock. Every time a lock is acquired, that thread goes through all the waiters of that lock and looks at their priorities in `accept_from_waiters`. The thread would find the highest and make that its new effective priority if it's higher than its old effective priority. This takes care of multiple/nested donations.
+Rather than using a priority queue data structure, we found it to be more
+efficient to just search for the thread with the highest priority when we call
+`thread_yield` or any time we want to switch threads. Using this implementation,
+we are able to efficiently access the thread with the highest priority when
+necessary by iterating through the `ready_list` rather than having to sort the
+priority queue every time we update the priority of the threads. We figured that
+because the thread priorities were always changing, it would be better to
+iterate through and find the max every time in `O(n)` runtime than sort every
+update which is `O(log(n))`.
 
-We also made it so that every time Thread A tries to acquire a lock, we see if that lock has a holder B, and if it does, we will update B's priority to be A's if A's is higher in `donate_to_holder`. This takes care of chain donations as well because we will be looking at B's effective priority, which already includes the donations it has received. Then when B releases that lock, in `accept_from_waiters`, we go through all the other locks B has, if any, and change B's priority to be the highest out of all the waiters of all the locks. If the highest priority is less than B's original priority or there aren't any waiters, we change B's priority to be its original priority.
+Our initial implementation did not correctly account for multiple/nested
+donations. To counter this, we decided to utilize the `waiters` list that is
+a member of the semaphore struct. Since each lock uses a semaphore, we are able
+to use this list to keep track of all the threads waiting for a particular lock.
+Every time a lock is acquired, that thread goes through all the waiters of that
+lock and sets its own priority to the highest of its own or any of its waiter's
+priorities. If a new thread waits on a lock, we have it try to recursively
+donate its priority to the holder of that lock, and if that thread is also
+waiting on a lock, we can recursively donate until we reach a thread that is not
+waiting on a lock. This is accomplished in the function `donate_to_holder`.
 
-We made sure to choose the highest priority thread for the other synchronization primitives as well. When we up a semaphore, we call `thread_yields_to_highest()`, which checks to see if the current thread is the highest priority, and if it isn't then it yields. This makes sure that the thread with the highest priority runs instead of the previously running thread. For condition variables, we signal to the highest priority thread so we unblock just that one. We do this by looking at all the semaphores waiting for that condition variable and signaling to the one that has the highest priority waiter.
+We made sure to choose the highest priority thread for the other synchronization
+primitives as well. When we up a semaphore, we call `thread_yield`. This works
+because we changed `next_thread_to_run` to return the thread with the highest
+priority. This makes sure that the thread with the highest priority runs instead
+of the previously running thread. For condition variables, rather than sending
+a signal to any thread, we send it to the one with the highest priority. We do
+this by looking at all the waiters of all the semaphores of that condition
+variable and signal that one to wake up. We also call `thread_yield` in all cases
+in which a thread's priority changes, (eg. when a thread acquires a lock,
+releases a lock, sets its own priority).
 
-By doing all the above, we make sure that we are always yielding to the highest priority thread immediately after any change in priority.
+By doing all the above, we ensure that we are always yielding to the
+highest priority thread immediately after any change in priority.
 
 
 ## Part 3: Multi-level Feedback Queue Scheduler (MLFQS)
 
-Rather than using a priority queue to maintain all the ready threads ordered by their priorities, we found it to be more efficient to simply always be working with the `ready_list`. Using this implementation, we are able to efficiently access the thread with the highest priority when necessary by iterating through the `ready_list` rather than having to sort the priority queue every time we update the priority of the threads.
+Our implementation for this is the same as for the Priority Queue scheduler.
+We still keep using the `ready_list` and manually search through for the highest
+priority thread to run.
 
-On the creation of every thread in `init_thread`, we set the `nice` value, the `t_recent_cpu` (which is 0 if the thread is `main`, the initial thread, or the value of the parent thread (`thread_current ()`), otherwise), and the `priority` by calling a function we defined called `update_mlfqs_priority(thread)`. When setting priorities, we are careful to make a distinction on how we set the priority based on the value of the `thread_mlfqs`. - We set `thread_set_priority` to only work if `thread_mlfqs` is false. We also check the tag in `timer_interrupt()` and `init_thread()` in order to set variables specific to mlfqs.
+On the creation of every thread in `init_thread`, we set the `nice` value, the
+`t_recent_cpu`, which is 0 if it is the initial thread ('main'), or the value of
+the parent thread otherwise. We calculate and update the priority of a thread
+by calling `update_mlfqs_priority`. When setting priorities, we are careful to
+make a distinction on how we set the priority based on the value of the
+`thread_mlfqs`. - We set `thread_set_priority` to only work if `thread_mlfqs`
+is false. We also check the tag in `timer_interrupt()` and `init_thread()` in
+order to set variables specific to mlfqs.
 
-In `timer_interrupt` we call `thread_get_recent_cpu` on every tick, where the current thread's `t_recent_cpu` variable is incremented by one at every tick, and the `t_recent_cpu` of every other thread is updated according to the given formula at every second (more specifically at `timer_ticks() % TIMER_FREQ == 0`). the `load_avg` static variable is also updated at every second.
+In `timer_interrupt` we call `thread_set_recent_cpu` on every tick, where the
+current thread's `t_recent_cpu` variable is incremented by one at every tick,
+and the `t_recent_cpu` of every other thread is updated according to the given
+formula at every second (specifically at `timer_ticks() % TIMER_FREQ == 0`).
+The `load_avg` static variable is also updated at every second by the function
+`thread_set_load_avg`.
 
 
 
@@ -44,16 +87,19 @@ In `timer_interrupt` we call `thread_get_recent_cpu` on every tick, where the cu
 
 ## Work Distribution
 
-We all got together and brainstormed how to implement the different tasks. We also worked together via pair programming to write all the code and implement the tasks. Listed below, are the specific actions each member of our group did.
+We all got together and brainstormed how to implement the different tasks.
+We also worked together via pair programming to write all the code and implement
+the tasks. Listed below, are the specific actions each member of our group did.
 
-Aaron Xu - Wrote the documentation for Task 1 and implemented it. He also worked on the documentation and implementation of Task 2.
+### Aaron Xu
+Documented and Implemented Part 1. Pair programmed with Yena to implement Part 2.
+Also debugged and implemented part of Part 3 along with the rest of the group.
 
-Aidan Meredith - Answered the additional questions of the design document. He also worked on the implementation of Task 3.
+Aidan Meredith - Answered the additional questions of the design document and worked on the Part 3 with the rest of the group.
 
-Louise Feng - Worked on the documentation of Task 2 and Task 3. She also worked on the implementation of Task 3 and wrote the final report for Task 3.
+Louise Feng - Worked on the documentation of Part 2 and pair programmed with Aidan to implement Part 3. Also wrote the final report for Part 3.
 
-Yena Kim - Worked on the documentation of Task 2 and Task 3 and worked on the implementation of Task 2. She also wrote the final report for Tasks 1 and 2.
-
+Yena Kim - Paired program with Aaron on Part 2 and helped implemented Task 3. Also wrote the final report for Tasks 1 and 2.
 
 ## Things That Went Well
 
