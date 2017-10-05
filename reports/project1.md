@@ -91,15 +91,21 @@ We all got together and brainstormed how to implement the different tasks.
 We also worked together via pair programming to write all the code and implement
 the tasks. Listed below, are the specific actions each member of our group did.
 
-### Aaron Xu
+#### Aaron Xu
 Documented and Implemented Part 1. Pair programmed with Yena to implement Part 2.
 Also debugged and implemented part of Part 3 along with the rest of the group.
 
-Aidan Meredith - Answered the additional questions of the design document and worked on the Part 3 with the rest of the group.
+#### Aidan Meredith
+Answered the additional questions of the design document and
+pair programmed with Louise and worked with the rest of the group to finish Part 3.
 
-Louise Feng - Worked on the documentation of Part 2 and pair programmed with Aidan to implement Part 3. Also wrote the final report for Part 3.
+#### Louise Feng
+Worked on the documentation of Part 2 and pair programmed with
+Aidan to implement Part 3. Also wrote the final report for Part 3.
 
-Yena Kim - Paired program with Aaron on Part 2 and helped implemented Task 3. Also wrote the final report for Tasks 1 and 2.
+#### Yena Kim
+Paired programmed with Aaron on Part 2 and helped implemented Task 3.
+Also wrote the final report for Tasks 1 and 2.
 
 ## Things That Went Well
 
