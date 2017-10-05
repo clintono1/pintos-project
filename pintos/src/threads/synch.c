@@ -251,7 +251,6 @@ accept_from_waiters (struct thread *t)
   struct list_elem *e;
 
   int max_priority = t->base_priority;
-  list_less_func *comparison = &compare_threads;
   enum intr_level old_level = intr_disable ();
   for (e = list_begin (&t->locks); e != list_end (&t->locks);
        e = list_next (e))

@@ -100,7 +100,6 @@ struct thread
     struct lock *waiting_for_this_lock;    /* The lock this thread is waiting for*/
     fixed_point_t t_recent_cpu;
     int nice;                           /* Niceness factor. */
-    // struct fixed_point_t recent_cpu;    /* Amount of CPU time the thread has received. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -150,6 +149,5 @@ int thread_get_load_avg (void);
 void thread_set_load_avg (void);
 void update_mlfqs_priority(struct thread *, void* aux);
 struct thread *get_thread_with_most_priority (struct list *);
-struct thread *get_ready_thread_with_most_priority ();
 
 #endif /* threads/thread.h */

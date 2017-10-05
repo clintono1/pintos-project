@@ -29,8 +29,6 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
-// static struct list priority_queue;
-
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -383,24 +381,25 @@ thread_get_load_avg (void)
   return fix_round (fix_scale (load_avg, 100));
 }
 
-/* Recalculates the static variable LOAD_AVG. */
+/* Recalculates the static variable LOAD_AVG. 
+  load_avg = (59/60) × load_avg + (1/60) × 
+  (list_size (&ready_list) + not_idle) */
 void
 thread_set_load_avg (void)
 {
   int not_idle = 1; // 1 when running thread is not the idle thread
   if (thread_current () == idle_thread)
     not_idle = 0;
-  // load_avg = (59/60) × load_avg + (1/60) × (list_size (&ready_list) + not_idle);
   fixed_point_t temp = fix_mul (fix_frac (59, 60), load_avg);
   temp = fix_add (temp, fix_scale (fix_frac (1, 60), list_size (&ready_list) + not_idle));
   load_avg = temp;
 }
 
-/* Updates the priority for thread T when THREAD_MLFQS is true. */
+/* Updates the priority for thread T when THREAD_MLFQS is true.
+ priority = PRI_MAX − (recent_cpu/4) − (nice × 2) */
 void
 update_mlfqs_priority (struct thread* t, UNUSED void* aux)
 {
-  // priority = PRI_MAX − (recent_cpu/4) − (nice × 2)
   int new_p = fix_trunc (fix_sub (fix_sub (fix_int (PRI_MAX),
                                            fix_div (t->t_recent_cpu, fix_int (4))),
                                   fix_scale (fix_int (t->nice), 2)));
