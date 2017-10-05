@@ -175,15 +175,16 @@ timer_interrupt (struct intr_frame *args UNUSED)
   thread_tick ();
   thread_action_func *wake_thread = &thread_check_timer;
   thread_foreach (wake_thread, NULL); /*Check if any threads need to wake up */
-  if (thread_mlfqs) {
-    if (ticks % TIMER_FREQ == 0) {
-      thread_set_load_avg();
+  if (thread_mlfqs)
+    {
+      if (ticks % TIMER_FREQ == 0)
+        thread_set_load_avg();
+
+      thread_set_recent_cpu();
+
+      if (ticks % 4 == 0)
+        thread_foreach(&update_mlfqs_priority, NULL);
     }
-    thread_set_recent_cpu();
-    if (ticks % 4 == 0) {
-      thread_foreach(&update_mlfqs_priority, NULL);
-    }
-  }
 }
 
 /* Check if this thread should be woken up. If so,
@@ -191,10 +192,11 @@ timer_interrupt (struct intr_frame *args UNUSED)
 void
 thread_check_timer (struct thread *t, void * randomArg UNUSED)
 {
-  if (t->wakeAtTick != 0 && t->wakeAtTick <= ticks) {
-    t->wakeAtTick = 0;
-    thread_unblock (t);
-  }
+  if (t->wakeAtTick != 0 && t->wakeAtTick <= ticks)
+    {
+      t->wakeAtTick = 0;
+      thread_unblock (t);
+    }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

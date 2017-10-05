@@ -115,15 +115,14 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) {
-    list_less_func *comparison = &compare_threads;
-    struct list_elem *maxElem = list_max (&sema->waiters,
-                                           comparison,
-                                           NULL);
-    struct thread *highest_priority_thread = list_entry (maxElem, struct thread, elem);
-    list_remove (maxElem);
-    thread_unblock (highest_priority_thread);
-  }
+  if (!list_empty (&sema->waiters))
+    {
+      list_less_func *comparison = &compare_threads;
+      struct list_elem *maxElem = list_max (&sema->waiters, comparison, NULL);
+      struct thread *highest_priority_thread = list_entry (maxElem, struct thread, elem);
+      list_remove (maxElem);
+      thread_unblock (highest_priority_thread);
+    }
   sema->value++;
   thread_yield ();
   intr_set_level (old_level);
@@ -210,35 +209,36 @@ lock_acquire (struct lock *lock)
 
   // Give donation when waiting for a lock
   enum intr_level old_level = intr_disable ();
-  if (!thread_mlfqs) {
+  if (!thread_mlfqs)
     donate_to_holder (current);
-  }
   sema_down (&lock->semaphore);
   current->waiting_for_this_lock = NULL;
   lock->holder = current;
 
   /* Adds the lock to the threads list of locks when it acquires it */
   list_push_back (&current->locks, &lock->list_elem);
-
-  // Set thread priority and accept donations.
-  if (!thread_mlfqs) {
-    accept_from_waiters (current);
-    thread_yield ();
-  }
   intr_set_level (old_level);
 
+  // Set thread priority and accept donations.
+  if (!thread_mlfqs)
+    {
+      accept_from_waiters (current);
+      thread_yield ();
+    }
 }
 
 /* Makes the current thread donate to the current holder of
    whatever lock it is waiting for. This also implements chain donation. */
 void
-donate_to_holder (struct thread *cur_thread) {
+donate_to_holder (struct thread *cur_thread)
+{
   /* Chain donation */
   struct thread *t = cur_thread;
-  while (t->waiting_for_this_lock && t->waiting_for_this_lock->holder) {
-    t = t->waiting_for_this_lock->holder;
-    t->priority = MAX (t->priority, cur_thread->priority);
-  }
+  while (t->waiting_for_this_lock && t->waiting_for_this_lock->holder)
+    {
+      t = t->waiting_for_this_lock->holder;
+      t->priority = MAX (t->priority, cur_thread->priority);
+    }
 }
 
 /* Changes a threads priority to the max of the lock's waiters' priority.
@@ -246,13 +246,13 @@ donate_to_holder (struct thread *cur_thread) {
    and the new holder needs its priority updated. It also allows a thread
    to update its priority after releasing a lock. */
 void
-accept_from_waiters (struct thread *t) {
+accept_from_waiters (struct thread *t)
+{
   struct list_elem *e;
-
-  ASSERT (intr_get_level () == INTR_OFF);
 
   int max_priority = t->base_priority;
   list_less_func *comparison = &compare_threads;
+  enum intr_level old_level = intr_disable ();
   for (e = list_begin (&t->locks); e != list_end (&t->locks);
        e = list_next (e))
     {
@@ -260,10 +260,11 @@ accept_from_waiters (struct thread *t) {
       struct thread *highest_priority_thread = get_thread_with_most_priority (&lock->semaphore.waiters);
       max_priority = MAX (max_priority, highest_priority_thread->priority);
     }
+  intr_set_level (old_level);
   t->priority = max_priority;
 }
 
-// Used in list_max to compare waiters' priorities
+// Used in list_max to compare threads' priorities
 bool compare_threads (const struct list_elem *a,
                       const struct list_elem *b,
                       void *aux UNUSED) {
@@ -287,17 +288,17 @@ lock_try_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
   success = sema_try_down (&lock->semaphore);
-  if (success) {
-    struct thread *current = thread_current ();
-    lock->holder = current;
-    list_push_back (&current->locks, &lock->list_elem);
-    if (!thread_mlfqs) {
-      enum intr_level old_level = intr_disable ();
-      accept_from_waiters (current);
-      thread_yield ();
-      intr_set_level (old_level);
+  if (success)
+    {
+      struct thread *current = thread_current ();
+      lock->holder = current;
+      list_push_back (&current->locks, &lock->list_elem);
+      if (!thread_mlfqs)
+        {
+          accept_from_waiters (current);
+          thread_yield ();
+        }
     }
-  }
   return success;
 }
 
@@ -319,17 +320,13 @@ lock_release (struct lock *lock)
   struct thread *current = thread_current ();
   list_remove (&lock->list_elem);
 
-  enum intr_level old_level;
-  if (!thread_mlfqs) {
-    old_level = intr_disable ();
+  if (!thread_mlfqs)
     accept_from_waiters (current);
-  }
 
   sema_up (&lock->semaphore);
-  if (!thread_mlfqs) {
+
+  if (!thread_mlfqs)
     thread_yield ();
-    intr_set_level (old_level);
-  }
 
 }
 
