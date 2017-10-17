@@ -21,7 +21,7 @@
 static int64_t ticks;
 
 /* Number of loops per timer tick.
-   Initialized by timer_calibrate (). */
+   Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 
 static intr_handler_func timer_interrupt;
@@ -29,7 +29,6 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
-void thread_check_timer (struct thread *t, void * randomArg UNUSED);
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -78,23 +77,23 @@ timer_ticks (void)
 }
 
 /* Returns the number of timer ticks elapsed since THEN, which
-   should be a value once returned by timer_ticks (). */
+   should be a value once returned by timer_ticks(). */
 int64_t
 timer_elapsed (int64_t then)
 {
   return timer_ticks () - then;
 }
 
-/* Sleeps for approximately TICKS timer ticks.*/
+/* Sleeps for approximately TICKS timer ticks.  Interrupts must
+   be turned on. */
 void
 timer_sleep (int64_t ticks)
 {
   int64_t start = timer_ticks ();
-  struct thread *t = thread_current ();
-  t->wakeAtTick = start + ticks;
-  enum intr_level old_level = intr_disable ();
-  thread_block ();
-  intr_set_level (old_level);
+
+  ASSERT (intr_get_level () == INTR_ON);
+  while (timer_elapsed (start) < ticks)
+    thread_yield ();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -126,7 +125,7 @@ timer_nsleep (int64_t ns)
 
    Busy waiting wastes CPU cycles, and busy waiting with
    interrupts off for the interval between timer ticks or longer
-   will cause timer ticks to be lost.  Thus, use timer_msleep ()
+   will cause timer ticks to be lost.  Thus, use timer_msleep()
    instead if interrupts are enabled. */
 void
 timer_mdelay (int64_t ms)
@@ -139,7 +138,7 @@ timer_mdelay (int64_t ms)
 
    Busy waiting wastes CPU cycles, and busy waiting with
    interrupts off for the interval between timer ticks or longer
-   will cause timer ticks to be lost.  Thus, use timer_usleep ()
+   will cause timer ticks to be lost.  Thus, use timer_usleep()
    instead if interrupts are enabled. */
 void
 timer_udelay (int64_t us)
@@ -152,7 +151,7 @@ timer_udelay (int64_t us)
 
    Busy waiting wastes CPU cycles, and busy waiting with
    interrupts off for the interval between timer ticks or longer
-   will cause timer ticks to be lost.  Thus, use timer_nsleep ()
+   will cause timer ticks to be lost.  Thus, use timer_nsleep()
    instead if interrupts are enabled.*/
 void
 timer_ndelay (int64_t ns)
@@ -173,31 +172,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
-  thread_action_func *wake_thread = &thread_check_timer;
-  thread_foreach (wake_thread, NULL); /*Check if any threads need to wake up */
-  if (thread_mlfqs)
-    {
-      if (ticks % TIMER_FREQ == 0)
-        thread_set_load_avg ();
-
-      thread_set_recent_cpu ();
-
-      if (ticks % 4 == 0) {
-        thread_foreach (&update_mlfqs_priority, NULL);
-      }
-    }
-}
-
-/* Check if this thread should be woken up. If so,
-   place it on the ready_list. */
-void
-thread_check_timer (struct thread *t, void * randomArg UNUSED)
-{
-  if (t->wakeAtTick != 0 && t->wakeAtTick <= ticks)
-    {
-      t->wakeAtTick = 0;
-      thread_unblock (t);
-    }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -249,7 +223,7 @@ real_time_sleep (int64_t num, int32_t denom)
   if (ticks > 0)
     {
       /* We're waiting for at least one full timer tick.  Use
-         timer_sleep () because it will yield the CPU to other
+         timer_sleep() because it will yield the CPU to other
          processes. */
       timer_sleep (ticks);
     }

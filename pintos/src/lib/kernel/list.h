@@ -173,7 +173,6 @@ void list_insert_ordered (struct list *, struct list_elem *,
                           list_less_func *, void *aux);
 void list_unique (struct list *, struct list *duplicates,
                   list_less_func *, void *aux);
-inline bool is_interior (struct list_elem *elem);
 
 /* Max and min. */
 struct list_elem *list_max (struct list *, list_less_func *, void *aux);

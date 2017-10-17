@@ -91,16 +91,9 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-    int wakeAtTick;                     /* Keep track of when this thread should wake up */
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    struct list_elem pq_elem;           /* list elem for priority queue */
-    int base_priority;                  /* The base priority. */
-    struct list locks;                  /* A list of locks it has. */
-    struct lock *waiting_for_this_lock;    /* The lock this thread is waiting for*/
-    fixed_point_t t_recent_cpu;
-    int nice;                           /* Niceness factor. */
-    // struct fixed_point_t recent_cpu;    /* Amount of CPU time the thread has received. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -145,11 +138,6 @@ void thread_set_priority (int);
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
-void thread_set_recent_cpu (void);
 int thread_get_load_avg (void);
-void thread_set_load_avg (void);
-void update_mlfqs_priority(struct thread *, void* aux);
-struct thread *get_thread_with_most_priority (struct list *);
-struct thread *get_ready_thread_with_most_priority ();
 
 #endif /* threads/thread.h */

@@ -21,7 +21,7 @@
 
    The symmetry of this arrangement eliminates lots of special
    cases in list processing.  For example, take a look at
-   list_remove (): it takes only two pointer assignments and no
+   list_remove(): it takes only two pointer assignments and no
    conditionals.  That's a lot simpler than the code would be
    without header elements.
 
@@ -43,7 +43,7 @@ is_head (struct list_elem *elem)
 
 /* Returns true if ELEM is an interior element,
    false otherwise. */
-inline bool
+static inline bool
 is_interior (struct list_elem *elem)
 {
   return elem != NULL && elem->prev != NULL && elem->next != NULL;
@@ -87,7 +87,7 @@ list_next (struct list_elem *elem)
 
 /* Returns LIST's tail.
 
-   list_end () is often used in iterating through a list from
+   list_end() is often used in iterating through a list from
    front to back.  See the big comment at the top of list.h for
    an example. */
 struct list_elem *
@@ -118,7 +118,7 @@ list_prev (struct list_elem *elem)
 
 /* Returns LIST's head.
 
-   list_rend () is often used in iterating through a list in
+   list_rend() is often used in iterating through a list in
    reverse order, from back to front.  Here's typical usage,
    following the example from the top of list.h:
 
@@ -138,11 +138,11 @@ list_rend (struct list *list)
 
 /* Return's LIST's head.
 
-   list_head () can be used for an alternate style of iterating
+   list_head() can be used for an alternate style of iterating
    through a list, e.g.:
 
       e = list_head (&list);
-      while ( (e = list_next (e)) != list_end (&list))
+      while ((e = list_next (e)) != list_end (&list))
         {
           ...
         }
@@ -164,7 +164,7 @@ list_tail (struct list *list)
 
 /* Inserts ELEM just before BEFORE, which may be either an
    interior element or a tail.  The latter case is equivalent to
-   list_push_back (). */
+   list_push_back(). */
 void
 list_insert (struct list_elem *before, struct list_elem *elem)
 {
@@ -223,11 +223,11 @@ list_push_back (struct list *list, struct list_elem *elem)
    followed it.  Undefined behavior if ELEM is not in a list.
 
    A list element must be treated very carefully after removing
-   it from its list.  Calling list_next () or list_prev () on ELEM
+   it from its list.  Calling list_next() or list_prev() on ELEM
    will return the item that was previously before or after ELEM,
-   but, e.g., list_prev (list_next (ELEM)) is no longer ELEM!
+   but, e.g., list_prev(list_next(ELEM)) is no longer ELEM!
 
-   The list_remove () return value provides a convenient way to
+   The list_remove() return value provides a convenient way to
    iterate and remove elements from a list:
 
    for (e = list_begin (&list); e != list_end (&list); e = list_remove (e))
@@ -235,7 +235,7 @@ list_push_back (struct list *list, struct list_elem *elem)
        ...do something with e...
      }
 
-   If you need to free () elements of the list then you need to be
+   If you need to free() elements of the list then you need to be
    more conservative.  Here's an alternate strategy that works
    even in that case:
 
@@ -293,7 +293,7 @@ list_back (struct list *list)
 }
 
 /* Returns the number of elements in LIST.
-   Runs in O (n) in the number of elements. */
+   Runs in O(n) in the number of elements. */
 size_t
 list_size (struct list *list)
 {
@@ -343,7 +343,7 @@ is_sorted (struct list_elem *a, struct list_elem *b,
            list_less_func *less, void *aux)
 {
   if (a != b)
-    while ( (a = list_next (a)) != b)
+    while ((a = list_next (a)) != b)
       if (less (a, list_prev (a), aux))
         return false;
   return true;
@@ -399,8 +399,8 @@ inplace_merge (struct list_elem *a0, struct list_elem *a1b0,
 }
 
 /* Sorts LIST according to LESS given auxiliary data AUX, using a
-   natural iterative merge sort that runs in O (n lg n) time and
-   O (1) space in the number of elements in LIST. */
+   natural iterative merge sort that runs in O(n lg n) time and
+   O(1) space in the number of elements in LIST. */
 void
 list_sort (struct list *list, list_less_func *less, void *aux)
 {
@@ -441,7 +441,7 @@ list_sort (struct list *list, list_less_func *less, void *aux)
 
 /* Inserts ELEM in the proper position in LIST, which must be
    sorted according to LESS given auxiliary data AUX.
-   Runs in O (n) average case in the number of elements in LIST. */
+   Runs in O(n) average case in the number of elements in LIST. */
 void
 list_insert_ordered (struct list *list, struct list_elem *elem,
                      list_less_func *less, void *aux)
@@ -474,7 +474,7 @@ list_unique (struct list *list, struct list *duplicates,
     return;
 
   elem = list_begin (list);
-  while ( (next = list_next (elem)) != list_end (list))
+  while ((next = list_next (elem)) != list_end (list))
     if (!less (elem, next, aux) && !less (next, elem, aux))
       {
         list_remove (next);
