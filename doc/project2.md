@@ -24,11 +24,10 @@ Design Document for Project 2: User Programs
 ### Algorithms
 ### Synchronization
 ### Rationale
+
+
+
 ## Design Doc Additional Questions
-
-
-
-## Additional Questions
 
 ### 1. Please identify a test case that uses an invalid stack pointer ($esp) when making a syscall. Provide the name of the test and explain how the test works.
 
