@@ -47,9 +47,9 @@ In section 3.1.7 in the specs, it is specified that "As part of a system call, t
 
 1. The name of the thread is **main** and the thread is at address
    **0xc000e000**. The only other thread present at this time is the **idle**
-   thread at address **0xc0104000**.
-   
+   thread at address **0xc0104000**.  
        **struct thread of main**:  
+       
        ```
        0xc000e000 {tid = 1, status = THREAD_RUNNING,  
        name = "main", '\000' <repeats 11 times>,  
