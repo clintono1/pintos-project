@@ -110,11 +110,23 @@ previously set up.
 ### Rationale
 ## Task 3: File Operation Syscalls
 ### Data Structures and Functions
+In thread.c, we can define a global variable `struct lock filesys_lock` that
+will allow us to restrict file operation syscalls to only call one filesystem
+function at a time. Then in `thread_init`, we call lock_init(&filesys_lock) to
+initialize the lock.
 ### Algorithms
+We simply call `lock_acquire` and `lock_release` before and after every syscall
+in every filesystem function.
 ### Synchronization
+For each filesystem function, before the syscall, we do
+`lock_acquire(&filesys_lock);` and `lock_release(&filesys_lock)` after every
+syscall. This will prevent concurrent calls to syscall from happening since
+there is only one lock and all syscalls are placed in the critical section. Thus,
+there will be no race conditions or multiple calls when trying to perform
+a filesystem operation.
 ### Rationale
-
-
+We do this because it seemed to be the simplest way to implement thread safety
+for these file operations.
 
 ## Design Doc Additional Questions
 
