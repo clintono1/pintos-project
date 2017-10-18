@@ -103,11 +103,31 @@ has not yet been set up (which is done in `load`), we know that it will start
 at PHYS_BASE, so we can set up the values beforehand. After setting up the
 user stack, we can simply move the pointer to the end of the arguments we
 previously set up.
+
+
 ## Task 2: Process Control Syscalls
+
 ### Data Structures and Functions
+
+
+
 ### Algorithms
+
+For each of the system calls, we add another `else if` clause to `syscall_handler` in order to check if that particular syscall is being called. For `SYS_PRACTICE`, we simply grab the first argument from the stack and incremement it by one. For `SYS_HALT` we terminate Pintos by calling `shutdown_power_off()`. For `SYS_EXEC`, we want to run the executable that is in `args[1]`. However, we need to know if the executable has been successfully loaded or not before we can continue. To ensure this, we pass in a semaphore into `process_execute` by concatenating it to the string `args[1]`. This semaphore is initialized at 0 and will have `sema_up` called on it only when `process_execute` is completely done running. 
+
+For `SYS_WAIT`, we want to wait for the pid that is specified in `args[1]` to finish executing. First we check that the given pid is actually a child of the currently running process. If it isn't we simply return -1. Otherwise, in `process_execute`, we make sure to add another argument to `start_process`, which will be the address to a semaphore that is accessible to both parent and child. This semaphore will be initialized to 0, and will always have `sema_up` called on it when the child process is finished running. If we call the syscall wait, this will make the process go to `process_wait`, where it will try to call `sema_down` on the shared semaphore. If the child process is finished running, and therefore incremented the value of the semaphore, then the parent process can continue. Otherwise, it will wait until the semaphore is incremented when the child process finishes.
+
+Before we utilize the stack pointer, we have to make sure it is in valid memory space. When we call `arg[0]` or `arg[1]` we first have to check that the whole component that the pointer is pointing at is in valid memory. We do this by calling `is_user_vaddr` on the virtual address of the stack pointer.
+
 ### Synchronization
+
+To implement the syscall wait, we implement a semaphore that is shared between child and parent. However, we don't have to worry about any synchronization issues between them, because the parent would only try to down it while the child will only ever up it, and both functions are atomic.
+
 ### Rationale
+
+
+
+
 ## Task 3: File Operation Syscalls
 ### Data Structures and Functions
 ### Algorithms
