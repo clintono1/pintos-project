@@ -30,6 +30,7 @@ start_process (void *file_name_)
 	num_args += 1;
 	}
 	// Parse the args
+	int i = 0;
 	char *args[num_args];
 	for (arg = strtok_r(file_name, " ", &ptr); arg != NULL; arg = strtok_r(NULL, " ", &ptr)) {
 	args[i] = arg;
@@ -207,9 +208,42 @@ In thread.c, we can define a global variable `struct lock filesys_lock` that
 will allow us to restrict file operation syscalls to only call one filesystem
 function at a time. Then in `thread_init`, we call lock_init(&filesys_lock) to
 initialize the lock.
+
+We will need an array of 128 file objects and declare this in `thread_init`.  
+`struct file files[128]; // Global variable in thread.c`  
+`files = malloc(128 * sizeof(struct file)); // Initialized in thead_init`  
+The file descriptor will be the index to the array and accessing this array
+will return the corresponding file object.
+
+We will also need a global variable to keep track of the most recent file
+descriptor assigned.  
+`int next_fd = 3 // Goes in thread_init`
+
 ### Algorithms
-We simply call `lock_acquire` and `lock_release` before and after every syscall
-in every filesystem function.
+In `file`, before returning the file descriptor, we will get the file object
+by calling `filesys_open` and store this into `files[next_fd]` and then
+increment `next_fd` by one.
+
+In order to prevent executable files that are running from being written to,
+we must remove the line `file_close (file);` from `load()`. This is because
+`file_close` calls `file_allow_write` and we do not want this to happen.
+Instead, we will call `file_deny_write` in `load` so that we will be able
+to prevent writes to the executable file.
+
+In `write`, given the file descriptor, we can access the file object by indexing
+the `files` array. We can check the **deny_write** status of the file object
+and return -1 if the status is True.
+
+In `thread_exit`, we can grab the name of the current running executable since
+we stored that onto the user stack in part 1. Then we can iterate through `files`
+and find the  file object with this name and get its associated file descriptor and then do
+`fileObj->inode->open_cnt--;` on that returned file object. Then we can call
+`file_allow_write` on the file object to allow other files to write to it.
+If `open_cnt` is 0, we can free the file object by calling `file_close` on the
+file object and set the value of `files` at index of the file descriptor we
+obtained to NULL.
+
+
 ### Synchronization
 For each filesystem function, before the syscall, we do
 `lock_acquire(&filesys_lock);` and `lock_release(&filesys_lock)` after every
@@ -217,9 +251,16 @@ syscall. This will prevent concurrent calls to syscall from happening since
 there is only one lock and all syscalls are placed in the critical section. Thus,
 there will be no race conditions or multiple calls when trying to perform
 a filesystem operation.
+
 ### Rationale
-We do this because it seemed to be the simplest way to implement thread safety
-for these file operations.
+We need the `filesys_lock` because we want to restrict it to only have one
+file operation occur at a time. We have the `files` array act as pintos's file
+descriptor table, so we can access both the file descriptor and the file object.
+We start `next_fd` at 3 because the first three values are reserved for stdin,
+stdout, and stderr. We keep track of the open file objects so that we can
+access the number of openers of files from `open` and, `write`, and `thread_exit`.
+We use an array here because we know the order in which file descriptors are created
+(smallest unused value) and it will be quick to index through this array.
 
 ## Design Doc Additional Questions
 
