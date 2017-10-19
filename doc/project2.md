@@ -110,7 +110,7 @@ previously set up.
 
 ### Data Structures and Functions
 
-We create a struct `child_info` in `thread.h` for every child thread created. The parent of the child will have a list of `child_info` structs so that we can access the information about the child that we need. The list for every parent will be as long as the number of children it has. Inside `child_info` we will keep track of a semaphore shared between the parent and child as well as the exit code of the child, the child's pid, and a list elem:
+We create a struct `child_info` in `thread.h` for every child thread created. The parent of the child will have a list of `child_info` structs so that we can access the information about the child that we need. The list for every parent will be as long as the number of children it has. Inside `child_info` we will keep track of a semaphore shared between the parent and child as well as the exit code of the child, the child's pid, a list elem, and a counter denoting if the parent and the child are running:
 
 ```
 struct child_info
@@ -119,6 +119,7 @@ struct child_info
 		int exit_code;
 		pid_t child_pid;
 		struct list_elem elem;
+		int counter;
 	}
 ```
 
@@ -187,7 +188,7 @@ For `SYS_WAIT`, we want to wait for the pid that is specified in `args[1]` to fi
 
 We create an instance of the struct `child_info` in `thread_create ()` so that every child created has a `child_info` associated with it by allocating space for it and initializing it. We set that child's instance variable `info` to be a pointer to that newly created `child_info` instance. We also add this struct to the parent's list of `child_info` structs by calling `thread_current ()` to get the parent. We also initialize the semaphore inside `child_info` to be 0 at this time. This semaphore is accessible to both parent and child. It will always have `sema_up` called on it when the child process is finished running. If we call the syscall wait, this will make the process go to `process_wait`, where it will try to call `sema_down` on the shared semaphore. If the child process is finished running, and therefore incremented the value of the semaphore, then the parent process can continue. Otherwise, it will wait until the semaphore is incremented when the child process finishes.
 
-When we exit a parent thread, we make sure to go through `children`, the list of `child_info` structs that correspond to its children, and free the memory that we allocated for each struct, because once the parent is terminated, we no longer have any need for them.	We do this in `thread_exit ()`.
+We want to free the memory we allocated for the `child_info` struct when both the parent and the child have exited and the struct is no longer needed. For this we keep a counter `counter` initialized to 2 in each `child_info`. When we exit a parent thread(`thread_exit()`), we make sure to go through `children`, the list of `child_info` structs that correspond to its children, and decrement the counter. We also decrement counter when the child process terminates. If both processes have terminated, then the struct can be freed so after we decrement the counter, we check if we should free the struct and if `counter == 0` then we do.
 
 Before we utilize the stack pointer, we have to make sure it is in valid memory space. When we call `args[0]` or `args[1]` we first have to check that the whole component that the pointer is pointing at is in valid memory. We do this by calling `is_user_vaddr` on the virtual address of the stack pointer.
 
