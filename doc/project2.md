@@ -136,14 +136,14 @@ will allow us to restrict file operation syscalls to only call one filesystem
 function at a time. Then in `thread_init`, we call lock_init(&filesys_lock) to
 initialize the lock.
 
-We will need an array of 128 file objects and declare this in `thread_init`.
-`struct file files[128]; // Global variable in thread.c`
-`files = malloc(128 * sizeof(struct file)); // Initialized in thead_init`
+We will need an array of 128 file objects and declare this in `thread_init`.  
+`struct file files[128]; // Global variable in thread.c`  
+`files = malloc(128 * sizeof(struct file)); // Initialized in thead_init`  
 The file descriptor will be the index to the array and accessing this array
 will return the corresponding file object.
 
 We will also need a global variable to keep track of the most recent file
-descriptor assigned.
+descriptor assigned.  
 `int next_fd = 3 // Goes in thread_init`
 
 ### Algorithms
