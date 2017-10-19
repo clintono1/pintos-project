@@ -30,6 +30,7 @@ start_process (void *file_name_)
 	num_args += 1;
 	}
 	// Parse the args
+	int i = 0;
 	char *args[num_args];
 	for (arg = strtok_r(file_name, " ", &ptr); arg != NULL; arg = strtok_r(NULL, " ", &ptr)) {
 	args[i] = arg;
