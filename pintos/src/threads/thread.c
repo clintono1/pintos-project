@@ -281,9 +281,11 @@ void
 thread_exit (void)
 {
   struct thread *current_thread = thread_current();
+  sema_down (current_thread->info->shared_sema);
   if (current_thread->info->exit_code == NULL) {
     current_thread->info->exit_code = -1;
   }
+  sema_up (current_thread->info->shared_sema);
 
   ASSERT (!intr_context ());
 

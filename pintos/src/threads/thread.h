@@ -110,7 +110,7 @@ struct thread
 struct child_info
   {
     /* Used to pass info between parent and child thread */
-    struct semaphore shared_sema;
+    struct semaphore *shared_sema;
     int exit_code;
     pid_t child_pid;
     struct list_elem elem;
