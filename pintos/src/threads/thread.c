@@ -280,6 +280,11 @@ thread_tid (void)
 void
 thread_exit (void)
 {
+  struct thread *current_thread = thread_current();
+  if (current_thread->info->exit_code == NULL) {
+    current_thread->info->exit_code = -1;
+  }
+
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
@@ -290,7 +295,7 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-  list_remove (&thread_current()->allelem);
+  list_remove (&current_thread->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -462,6 +467,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->info->exit_code = NULL;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
