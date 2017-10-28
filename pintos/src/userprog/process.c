@@ -89,10 +89,28 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED)
+process_wait (pid_t pid)
 {
-  sema_down (&temporary);
-  return 0;
+  // Turn off interupts while iterating over list
+  struct list_elem *e;
+  int exit_code = -1;
+  struct thread *current_thread = thread_current();
+  enum intr_level old_level = intr_disable ();
+  for (e = list_begin (&current_thread->children); e != list_end (&current_thread->children);
+       e = list_next (e))
+    {
+      struct child_info *c_info = list_entry (e, struct child_info, elem);
+      if (c_info->pid == pid) {
+        sema_down (c_info->wait_semaphore);
+        c_info->counter--;
+        exit_code = c_info->exit_code;
+        list_remove (&c_info->elem);
+        if (!c_info->counter)
+          free (c_info);
+      }
+    }
+  intr_set_level (old_level);
+  return exit_code;
 }
 
 /* Free the current process's resources. */

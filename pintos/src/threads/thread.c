@@ -281,12 +281,16 @@ void
 thread_exit (void)
 {
   struct thread *current_thread = thread_current();
-  sema_down (current_thread->info->shared_sema);
-  if (current_thread->info->exit_code == NULL) {
-    current_thread->info->exit_code = -1;
-  }
-  sema_up (current_thread->info->shared_sema);
-
+  if (current_thread->info->exit_code == NULL)
+      current_thread->info->exit_code = -1;
+  current_thread->info->counter--;
+  // Turn off interrupts to ensure list functions don't break.
+  intr_disable ();
+  // Remove child info from the childrens list and free if parent is dead.
+  if (!current_thread->info->counter)
+      free (current_thread->info);
+  else
+      sema_up (current_thread->info->wait_semaphore);
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
@@ -296,7 +300,6 @@ thread_exit (void)
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
-  intr_disable ();
   list_remove (&current_thread->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
@@ -469,7 +472,9 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->info = malloc(sizeof(struct child_info));
   t->info->exit_code = NULL;
+  sema_init (t->info->wait_semaphore, 0); // put this when calling thread_create?
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
