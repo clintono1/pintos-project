@@ -39,7 +39,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   	// trying to down a sempahore that will only be upped when process_execute is finished
   } else if (args[0] == SYS_WAIT) {
   	check_memory_access (args[1]);
-    return process_wait(*((pid_t *) args[1]));
+    f->eax = process_wait(*((pid_t *) args[1]));
   }
 }
 
