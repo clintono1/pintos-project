@@ -171,7 +171,6 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
-  struct exec_args *args = (struct exec_args *) aux;
 
   ASSERT (function != NULL);
 
@@ -183,15 +182,35 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   // Save info passed in by parent to child thread.
-  t->info = args->info;
   tid = t->tid = allocate_tid ();
+  char *file_name;
+  if (!strcmp((char *) aux, "/////"))
+    {
+      struct exec_args *args = (struct exec_args *) aux;
+      t->info = args->info;
+      file_name = args->file_name;
+    }
+  else
+    {
+      struct child_info *info = (struct child_info *) malloc(sizeof(struct child_info));
+      info->wait_semaphore = (struct semaphore *) malloc(sizeof(struct semaphore));
+      info->wait_child_exec = (struct semaphore *) malloc(sizeof(struct semaphore));
+      info->process_loaded = (int *) malloc(sizeof(int));
+      sema_init (info->wait_semaphore, 0);
+      sema_init (info->wait_child_exec, 0);
+      *(info->process_loaded) = 0;
+      info->counter = 1;
+      info->exit_code = NULL;
+      t->info = info;
+      file_name = (char *) aux;
+    }
   t->info->pid = tid;
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
   kf->function = function;
-  kf->aux = args->file_name;
+  kf->aux = file_name;
 
   /* Stack frame for switch_entry(). */
   ef = alloc_frame (t, sizeof *ef);
@@ -292,7 +311,12 @@ thread_exit (void)
   intr_disable ();
   // Remove child info from the childrens list and free if parent is dead.
   if (!current_thread->info->counter)
+    {
+      free (current_thread->info->process_loaded);
+      free (current_thread->info->wait_child_exec);
+      free (current_thread->info->wait_semaphore);
       free (current_thread->info);
+    }
   else
       sema_up (current_thread->info->wait_semaphore);
   ASSERT (!intr_context ());

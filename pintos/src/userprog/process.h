@@ -5,6 +5,7 @@
 
 struct exec_args
   {
+  	char *string_identifier;
     char *file_name;
     struct child_info *info;
   };

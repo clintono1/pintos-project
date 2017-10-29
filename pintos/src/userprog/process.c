@@ -32,16 +32,20 @@ process_execute (const char *file_name)
 {
   tid_t tid;
   struct thread *current_thread = thread_current();
-  struct child_info* info = malloc(sizeof(struct child_info));
+  struct child_info* info = (struct child_info *) malloc(sizeof(struct child_info));
+  info->wait_semaphore = (struct semaphore *) malloc(sizeof(struct semaphore));
+  info->wait_child_exec = (struct semaphore *) malloc(sizeof(struct semaphore));
+  info->process_loaded = (int *) malloc(sizeof(int));
   // Set up child_info struct for the child so we can save it in parent.
   struct exec_args *args;
-  info->process_loaded = 0;
+  *(info->process_loaded) = 0;
   info->exit_code = NULL;
   info->counter = 2;
   sema_init (info->wait_child_exec, 0);
   sema_init (info->wait_semaphore, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
+  args->string_identifier = "/////"; // This string can't be a path.
   args->file_name = palloc_get_page (0);
   args->info = info;
   if (args->file_name == NULL)
@@ -125,6 +129,9 @@ process_wait (pid_t pid)
         exit_code = c_info->exit_code;
         list_remove (&c_info->elem);
         if (!c_info->counter)
+          free (c_info->process_loaded);
+          free (c_info->wait_child_exec);
+          free (c_info->wait_semaphore);
           free (c_info);
       }
     }
