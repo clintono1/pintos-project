@@ -76,10 +76,11 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   struct thread *current_thread = thread_current();
+  if (success)
+    *(current_thread->info->process_loaded) = 1;
   sema_up (current_thread->info->wait_child_exec);
   if (!success)
     thread_exit ();
-  *(current_thread->info->process_loaded) = 1;
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
