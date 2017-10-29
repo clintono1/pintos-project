@@ -18,30 +18,30 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
-  check_memory_access (f->esp, sizeof(f->esp));
-  char** args = ((char**) f->esp);
-  printf("System call number: %d\n", (int) args[0]);
+  uint32_t* args = ((uint32_t*) f->esp);
+  check_memory_access (args, sizeof(args));
+  printf("System call number: %d\n", args[0]);
   struct thread *current_thread = thread_current();
-  if ((int) args[0] == SYS_EXIT) {
-  	check_memory_access (args[1], sizeof(int));
-    f->eax = (int) args[1];
-    printf("%s: exit(%d)\n", (char *) &thread_current ()->name, (int) args[1]);
-    current_thread->info->exit_code = (int) args[1];
-    thread_exit();
-  } else if ((int) args[0] == SYS_PRACTICE) {
-  	check_memory_access (args[1], sizeof(int));
-  	f->eax = (int) args[1] + 1;
-  } else if ((int) args[0] == SYS_HALT) {
-  	shutdown_power_off();
-  } else if ((int) args[0] == SYS_EXEC) {
+  if (args[0] == SYS_EXIT) {
   	check_memory_access (args[1], sizeof(args[1]));
+    f->eax = args[1];
+    printf("%s: exit(%d)\n", (char *) &thread_current ()->name, args[1]);
+    current_thread->info->exit_code = args[1];
+    thread_exit();
+  } else if (args[0] == SYS_PRACTICE) {
+  	check_memory_access (args[1], sizeof(args[1]));
+  	f->eax = args[1] + 1;
+  } else if (args[0] == SYS_HALT) {
+  	shutdown_power_off();
+  } else if (args[0] == SYS_EXEC) {
+  	check_memory_access (args[1], sizeof((char *) args[1]));
   	// add in a semaphore to args[1], which is the filename/arguments to be executed
-  	process_execute(args[1]);
+  	process_execute((char *) args[1]);
   	// wait for above to execute by:
   	// trying to down a sempahore that will only be upped when process_execute is finished
-  } else if ((int) args[0] == SYS_WAIT) {
-  	check_memory_access (args[1], sizeof(pid_t));
-    f->eax = process_wait((pid_t) args[1]);
+  } else if (args[0] == SYS_WAIT) {
+  	check_memory_access (args[1], sizeof(args[1]));
+    f->eax = process_wait(args[1]);
   }
 }
 

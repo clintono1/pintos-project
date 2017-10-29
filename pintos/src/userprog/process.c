@@ -37,7 +37,7 @@ process_execute (const char *file_name)
   info->wait_child_exec = (struct semaphore *) malloc(sizeof(struct semaphore));
   info->process_loaded = (int *) malloc(sizeof(int));
   // Set up child_info struct for the child so we can save it in parent.
-  struct exec_args *args;
+  struct exec_args args;
   *(info->process_loaded) = 0;
   info->exit_code = NULL;
   info->counter = 2;
@@ -45,20 +45,20 @@ process_execute (const char *file_name)
   sema_init (info->wait_semaphore, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  args->string_identifier = "/////"; // This string can't be a path.
-  args->file_name = palloc_get_page (0);
-  args->info = info;
-  if (args->file_name == NULL)
+  args.string_identifier = "/////"; // This string can't be a path.
+  args.file_name = palloc_get_page (0);
+  args.info = info;
+  if (args.file_name == NULL)
     return TID_ERROR;
-  strlcpy (args->file_name, file_name, PGSIZE);
+  strlcpy (args.file_name, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, args);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, &args);
   sema_down (info->wait_child_exec);
   if (tid == TID_ERROR || !info->process_loaded)
     {
       tid = TID_ERROR;
-      palloc_free_page (args->file_name);
+      palloc_free_page (args.file_name);
     }
   else
     list_push_back (&current_thread->children, &info->elem);
