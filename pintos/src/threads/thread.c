@@ -183,9 +183,9 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   // Save info passed in by parent to child thread.
-  t->info->wait_child_exec = args->exec_sema;
-  t->info->process_loaded = args->process_loaded;
+  t->info = args->info;
   tid = t->tid = allocate_tid ();
+  t->info->pid = tid;
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -476,9 +476,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->info = malloc(sizeof(struct child_info));
-  t->info->exit_code = NULL;
-  sema_init (t->info->wait_semaphore, 0); // put this when calling thread_create?
+  list_init (&t->children);
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();

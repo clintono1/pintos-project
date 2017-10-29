@@ -30,30 +30,34 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name)
 {
-  char *fn_copy;
   tid_t tid;
   struct thread *current_thread = thread_current();
-  struct semaphore *wait_child;
-  sema_init (wait_child, 0);
+  struct child_info* info = malloc(sizeof(struct child_info));
+  // Set up child_info struct for the child so we can save it in parent.
+  struct exec_args *args;
+  info->process_loaded = 0;
+  info->exit_code = NULL;
+  info->counter = 2;
+  sema_init (info->wait_child_exec, 0);
+  sema_init (info->wait_semaphore, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  struct exec_args *args;
-  int process_loaded = 0;
   args->file_name = palloc_get_page (0);
-  args->exec_sema = wait_child;
-  args->process_loaded = &process_loaded;
+  args->info = info;
   if (args->file_name == NULL)
     return TID_ERROR;
   strlcpy (args->file_name, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, args);
-  sema_down (wait_child);
-  if (tid == TID_ERROR || !process_loaded)
+  sema_down (info->wait_child_exec);
+  if (tid == TID_ERROR || !info->process_loaded)
     {
       tid = TID_ERROR;
       palloc_free_page (args->file_name);
     }
+  else
+    list_push_back (&current_thread->children, &info->elem);
   return tid;
 }
 
@@ -77,7 +81,9 @@ start_process (void *file_name_)
   palloc_free_page (file_name);
   struct thread *current_thread = thread_current();
   if (success)
-    *(current_thread->info->process_loaded) = 1;
+    {
+      *(current_thread->info->process_loaded) = 1;
+    }
   sema_up (current_thread->info->wait_child_exec);
   if (!success)
     thread_exit ();

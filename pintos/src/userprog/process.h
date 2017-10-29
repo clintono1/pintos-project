@@ -6,8 +6,7 @@
 struct exec_args
   {
     char *file_name;
-    struct semaphore *exec_sema;
-    int *process_loaded;
+    struct child_info *info;
   };
 
 tid_t process_execute (const char *file_name);
