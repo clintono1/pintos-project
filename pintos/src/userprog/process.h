@@ -3,6 +3,13 @@
 
 #include "threads/thread.h"
 
+struct exec_args
+  {
+    char *file_name;
+    struct semaphore *exec_sema;
+    int *process_loaded;
+  };
+
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
 void process_exit (void);

@@ -171,6 +171,7 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
+  struct exec_args *args = (struct exec_args *) aux;
 
   ASSERT (function != NULL);
 
@@ -181,13 +182,16 @@ thread_create (const char *name, int priority,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
+  // Save info passed in by parent to child thread.
+  t->info->wait_child_exec = args->exec_sema;
+  t->info->process_loaded = args->process_loaded;
   tid = t->tid = allocate_tid ();
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
   kf->function = function;
-  kf->aux = aux;
+  kf->aux = args->file_name;
 
   /* Stack frame for switch_entry(). */
   ef = alloc_frame (t, sizeof *ef);

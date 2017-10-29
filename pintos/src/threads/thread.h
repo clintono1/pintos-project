@@ -111,6 +111,9 @@ struct child_info
   {
     /* Used to pass info between parent and child thread */
     struct semaphore *wait_semaphore;
+    struct semaphore *wait_child_exec;   /* A reference to the semaphore used to release parent from
+                                            waiting for child to finish loading */
+    int *process_loaded;
     int exit_code;
     pid_t pid;
     struct list_elem elem;

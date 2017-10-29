@@ -44,7 +44,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 }
 
 void
-check_memory_access (char **addr) {
+check_memory_access (char **addr, int size) {
   if (addr == NULL || !is_user_vaddr(addr + sizeof(addr))) {
       struct thread *current_thread = thread_current ();
       current_thread->info->exit_code = -1;

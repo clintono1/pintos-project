@@ -19,7 +19,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -27,24 +26,34 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
+
 tid_t
 process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-
-  sema_init (&temporary, 0);
+  struct thread *current_thread = thread_current();
+  struct semaphore *wait_child;
+  sema_init (wait_child, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  struct exec_args *args;
+  int process_loaded = 0;
+  args->file_name = palloc_get_page (0);
+  args->exec_sema = wait_child;
+  args->process_loaded = &process_loaded;
+  if (args->file_name == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (args->file_name, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, args);
+  sema_down (wait_child);
+  if (tid == TID_ERROR || !process_loaded)
+    {
+      tid = TID_ERROR;
+      palloc_free_page (args->file_name);
+    }
   return tid;
 }
 
@@ -66,8 +75,11 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
+  struct thread *current_thread = thread_current();
+  sema_up (current_thread->info->wait_child_exec);
   if (!success)
     thread_exit ();
+  *(current_thread->info->process_loaded) = 1;
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -136,7 +148,6 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-  sema_up (&temporary);
 }
 
 /* Sets up the CPU for running user code in the current
