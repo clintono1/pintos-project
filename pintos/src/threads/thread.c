@@ -37,6 +37,10 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+struct lock filesys_lock;
+struct file *fd_table[128];
+int latest_fd = 0;
+
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame
   {
@@ -92,12 +96,46 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  lock_init (&filesys_lock);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+}
+
+/* Insert file object into the specified position. Returns the fd (index) */
+int
+insert_file_to_fd_table (int i, struct file *file)
+{
+  int index = get_next_fd ();
+  fd_table[index] = file;
+  return index;
+}
+
+/* Returns the next unused fd. */
+void
+get_next_fd (void)
+{
+  latest_fd += 1;
+  latest_fd = find_first_unused_fd ();
+}
+
+/* Iterates through the fd_table starting from latest_fd
+   and returns the index of the first empty spot */
+int
+find_first_unused_fd (void)
+{
+  int i;
+  for (i = latest_fd; i < 128; i++)
+    {
+      if (fd_table[i] == NULL)
+        return i;
+    }
+  for (i = 0; i < 128; i++)
+    if (fd_table[i] == NULL)
+      return i;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
