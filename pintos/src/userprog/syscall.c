@@ -19,6 +19,10 @@ static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
   uint32_t* args = ((uint32_t*) f->esp);
+  if (!address_is_valid (args, sizeof(args))) {
+    printf("%s: exit(%d)\n", &thread_current ()->name, -1); // Change to exit code later on and print in thread_exit.
+    thread_exit();
+  }
   if (args[0] == SYS_EXIT) {
     address_is_valid  (args[1], sizeof(args[1]));
     f->eax = args[1];
@@ -108,7 +112,7 @@ syscall_handler (struct intr_frame *f UNUSED)
    1 if it didnt */
 int
 address_is_valid (char *addr, int size) {
-  if (addr == NULL || !is_user_vaddr(addr + size)) {
+  if (addr == NULL || addr < 0x08048000 || !is_user_vaddr(addr + size)) {
       // struct thread *current_thread = thread_current ();
       // current_thread->info->exit_code = -1;
       return 0;
