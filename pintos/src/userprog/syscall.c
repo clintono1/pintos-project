@@ -132,7 +132,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_EXEC) {
     address_is_valid (args[1], sizeof((char *) args[1]));
     // add in a semaphore to args[1], which is the filename/arguments to be executed
-    process_execute((char *) args[1]);
+    f->eax = process_execute((char *) args[1]);
     // wait for above to execute by:
     // trying to down a sempahore that will only be upped when process_execute is finished
   } else if (args[0] == SYS_WAIT) {

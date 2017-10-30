@@ -166,6 +166,7 @@ start_process (void *file_name_)
 int
 process_wait (pid_t pid)
 {
+
   // Turn off interupts while iterating over list
   struct list_elem *e;
   int exit_code = -1;
@@ -189,6 +190,7 @@ process_wait (pid_t pid)
       }
     }
   intr_set_level (old_level);
+  // printf("wait(exec()) = %ld\n", pid);
   return exit_code;
 }
 
