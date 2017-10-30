@@ -19,28 +19,29 @@ static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
   uint32_t* args = ((uint32_t*) f->esp);
-  check_memory_access(args, sizeof(args));
+  address_is_valid (args, sizeof(args));
   if (args[0] == SYS_EXIT) {
+    address_is_valid  (args[1], sizeof(args[1]));
     f->eax = args[1];
     printf("%s: exit(%d)\n", &thread_current ()->name, args[1]);
     thread_exit();
   } else if (args[0] == SYS_CREATE) {
     // Check memory accesses for all below
-    check_memory_access(args[1], sizeof((char *) args[1]));
+    address_is_valid (args[1], sizeof((char *) args[1]));
     char *file_name = (char *) args[1];
     lock_filesys ();
     bool created = filesys_create (file_name, 1024); // Create new file with initial size;
     release_filesys ();
     f->eax = created;
   } else if (args[0] == SYS_REMOVE) {
-    check_memory_access(args[1], sizeof((char *) args[1]));
+    address_is_valid (args[1], sizeof((char *) args[1]));
     char *file_name = (char *) args[1];
     lock_filesys ();
     bool removed = filesys_create (file_name); // Create new file with initial size;
     release_filesys ();
     f->eax = removed;
   } else if (args[0] == SYS_OPEN) {
-    // check_memory_access((char *) args[1], sizeof((char *) args[1])); // Why is this passing without checking memory?
+    // address_is_valid ((char *) args[1], sizeof((char *) args[1])); // Why is this passing without checking memory?
     char *file_name = (char *) args[1];
     lock_filesys ();
     struct file *file = filesys_open (filesys_open); // Create new file with initial size;
@@ -53,13 +54,13 @@ syscall_handler (struct intr_frame *f UNUSED)
     f->eax = file_length (file);
     release_filesys ();
   } else if (args[0] == SYS_READ) {
-    check_memory_access(args[2], args[3]);
+    address_is_valid (args[2], args[3]);
     lock_filesys ();
     struct file *file = get_file (args[1]);
     f->eax = file_read (file, args[2], args[3]);
     release_filesys ();
   } else if (args[0] == SYS_WRITE) {
-    check_memory_access(args[2], args[3]);
+    address_is_valid (args[2], args[3]);
     lock_filesys ();
     if (args[1] == 1)
       {
@@ -89,11 +90,14 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 }
 
-void
-check_memory_access (char *addr, int size) {
+/* Checks if the address is null and if the address
+   and its size fits in the user address space. Returns 0 if an error occurred,
+   1 if it didnt */
+int
+address_is_valid (char *addr, int size) {
   if (addr == NULL || !is_user_vaddr(addr + size)) {
       // struct thread *current_thread = thread_current ();
       // current_thread->info->exit_code = -1;
-      thread_exit ();
+      return 0;
   }
 }
