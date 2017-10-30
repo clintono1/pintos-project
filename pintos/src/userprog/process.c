@@ -62,7 +62,52 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
+  // Count the number of arguments passed in
+  int num_args = 1;
+  char *ptr;
+  char *arg = strtok_r(file_name, " ", &ptr);
+  while (arg = strtok_r(NULL, " ", &ptr)) {
+  num_args += 1;
+  }
+  // Parse the args
+  int i = 0;
+  char *args[num_args];
+  for (arg = strtok_r(file_name, " ", &ptr); arg != NULL; arg = strtok_r(NULL, " ", &ptr)) {
+  args[i] = arg;
+  i++;
+  }
+
   success = load (file_name, &if_.eip, &if_.esp);
+
+  /* Store arguments in thread stack */
+  char **esp = &if_.esp;
+  for (i = num_args - 1; i >= 0; i--) {
+    *esp -= strlen(*(args + i)) + 1; // Count the null byte.
+    strlcpy(*esp, *(args + i), strlen(*(args + i)) + 1);
+  }
+  // word align the stack pointer
+  int offset_to_word_align = ((uintptr_t) *esp) % 4;
+  int j;
+  for (j = 0; j < offset_to_word_align; j++) {
+    *esp -= 1;
+    **(esp) = 0;
+  }
+  *esp -= 4;
+  **(esp) = NULL;
+  // Store addresses of the args in the thread stack
+  uintptr_t addr = PHYS_BASE;
+  for (i = num_args - 1; i >= 0; i--) {
+    *esp -= 4;
+    addr -= strlen(*(args + i)) + 1;
+    *((*esp)) = (char *)addr;
+  }
+  *esp -= 4;
+  *((char **)(*esp)) = *esp + 4;
+  *esp -= sizeof(int);
+  *((int *)*esp) = num_args;
+  *esp -= 4;
+  **esp = NULL;
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
