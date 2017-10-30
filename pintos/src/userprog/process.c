@@ -109,7 +109,7 @@ start_process (void *file_name_)
     **esp = (char *) addr;
   }
   *esp -= 4;
-  *((char **) *esp) = *esp + 4;
+  **esp = (char *) *esp + 4;
   *esp -= sizeof(int);
   *((int *) *esp) = num_args;
   *esp -= 4;
@@ -126,7 +126,7 @@ start_process (void *file_name_)
      arguments on the stack in the form of a `struct intr_frame',
      we just point the stack pointer (%esp) to our stack frame
      and jump to it. */
-  hex_dump (PHYS_BASE, *esp, (uintptr_t) PHYS_BASE - (uintptr_t) *esp, true);
+  hex_dump (*esp, *esp, (uintptr_t) PHYS_BASE - (uintptr_t) *esp, true);
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
