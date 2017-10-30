@@ -68,17 +68,17 @@ start_process (void *file_name_)
   char *ptr;
   char *arg = strtok_r(file_name, " ", &ptr);
   while (arg = strtok_r(NULL, " ", &ptr)) {
-  num_args += 1;
+    num_args += 1;
   }
   // Parse the args
   int i = 0;
   char *args[num_args];
   for (arg = strtok_r(file_name, " ", &ptr); arg != NULL; arg = strtok_r(NULL, " ", &ptr)) {
-  args[i] = arg;
-  i++;
+    args[i] = arg;
+    i++;
   }
 
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (args[0], &if_.eip, &if_.esp);
 
   /* Store arguments in thread stack */
   char **esp = &if_.esp;
@@ -91,21 +91,21 @@ start_process (void *file_name_)
   int j;
   for (j = 0; j < offset_to_word_align; j++) {
     *esp -= 1;
-    **(esp) = 0;
+    **esp = 0;
   }
   *esp -= 4;
-  **(esp) = NULL;
+  **esp = NULL;
   // Store addresses of the args in the thread stack
   uintptr_t addr = PHYS_BASE;
   for (i = num_args - 1; i >= 0; i--) {
     *esp -= 4;
     addr -= strlen(*(args + i)) + 1;
-    *((*esp)) = (char *)addr;
+    **esp = (char *) addr;
   }
   *esp -= 4;
-  *((char **)(*esp)) = *esp + 4;
+  *((char **) *esp) = *esp + 4;
   *esp -= sizeof(int);
-  *((int *)*esp) = num_args;
+  *((int *) *esp) = num_args;
   *esp -= 4;
   **esp = NULL;
 

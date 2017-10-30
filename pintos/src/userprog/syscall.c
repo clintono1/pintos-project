@@ -54,8 +54,15 @@ syscall_handler (struct intr_frame *f UNUSED)
     release_filesys ();
   } else if (args[0] == SYS_WRITE) {
     lock_filesys ();
-    struct file *file = get_file (args[1]);
-    f->eax = file_write (file, args[2], args[3]);
+    if (args[1] == 1)
+      {
+        putbuf(args[2], args[3]);
+      }
+    else
+      {
+        struct file *file = get_file (args[1]);
+        f->eax = file_write (file, args[2], args[3]);
+      }
     release_filesys ();
   } else if (args[0] == SYS_SEEK) {
     lock_filesys ();
