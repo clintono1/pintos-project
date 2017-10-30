@@ -100,6 +100,10 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
   lock_init (&filesys_lock);
+  latest_fd = 2; // First three should be taken by stdin, stdout, stderr.
+  struct file *dummyFile;
+  // Populate first three so they aren't overwritten. Do not try to access them.
+  fd_table[0] = fd_table[1] = fd_table[2] = dummyFile;
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -127,6 +131,12 @@ insert_file_to_fd_table (struct file *file)
   int index = get_next_fd ();
   fd_table[index] = file;
   return index;
+}
+
+struct file *
+get_file (int fd)
+{
+  return fd_table[fd];
 }
 
 /* Returns the next unused fd. */
