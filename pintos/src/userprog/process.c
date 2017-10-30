@@ -39,7 +39,7 @@ process_execute (const char *file_name)
   // Set up child_info struct for the child so we can save it in parent.
   void *args[3];
   *(info->process_loaded) = 0;
-  info->exit_code = NULL;
+  info->exit_code = 0;
   info->counter = 2;
   sema_init (info->wait_child_exec, 0);
   sema_init (info->wait_semaphore, 0);

@@ -272,7 +272,7 @@ thread_create (const char *name, int priority,
       sema_init (info->wait_child_exec, 0);
       *(info->process_loaded) = 0;
       info->counter = 1;
-      info->exit_code = NULL;
+      info->exit_code = 0;
       t->info = info;
       file_name = (char *) aux;
     }
@@ -376,8 +376,7 @@ void
 thread_exit (void)
 {
   struct thread *current_thread = thread_current();
-  if (current_thread->info->exit_code == NULL)
-      current_thread->info->exit_code = -1;
+  printf("%s: exit(%d)\n", (char *) current_thread->name, current_thread->info->exit_code);
   current_thread->info->counter--;
   // Turn off interrupts to ensure list functions don't break.
   intr_disable ();

@@ -21,29 +21,36 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
+  struct thread *current_thread = thread_current();
   uint32_t* args = ((uint32_t*) f->esp);
   if (!address_is_valid (args, sizeof(args))) {
-    printf("%s: exit(%d)\n", (char *) &thread_current ()->name, -1); // Change to exit code later on and print in thread_exit.
+    current_thread->info->exit_code = -1;
     thread_exit();
   }
-  struct thread *current_thread = thread_current();
   if (args[0] == SYS_EXIT) {
     // address_is_valid  (args[1], sizeof(args[1]));
     f->eax = args[1];
-    printf("%s: exit(%d)\n", (char *) &thread_current ()->name, args[1]);
     current_thread->info->exit_code = args[1];
     thread_exit();
   } else if (args[0] == SYS_CREATE) {
     // Check memory accesses for all below
     char *file_name = (char *) args[1];
-    address_is_valid (file_name, sizeof(file_name));
+    if (!address_is_valid (file_name, strlen(file_name) + 1) || !strcmp(file_name, ""))
+      {
+        current_thread->info->exit_code = -1;
+        thread_exit();
+      }
     lock_filesys ();
     bool created = filesys_create (file_name, 1024); // Create new file with initial size;
     release_filesys ();
     f->eax = created;
   } else if (args[0] == SYS_REMOVE) {
     char *file_name = (char *) args[1];
-    address_is_valid (file_name, sizeof(file_name));
+    if (!address_is_valid (file_name, strlen(file_name) + 1))
+      {
+        current_thread->info->exit_code = -1;
+        thread_exit();
+      }
     lock_filesys ();
     bool removed = filesys_remove (file_name); // Create new file with initial size;
     release_filesys ();
@@ -51,7 +58,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_OPEN) {
     // address_is_valid ((char *) args[1], sizeof((char *) args[1])); // Why is this passing without checking memory?
     char *file_name = (char *) args[1];
-    if (!address_is_valid ((char *) args[1], sizeof((char *) args[1])) || !strcmp((char *) args[1], ""))
+    if (!address_is_valid ((char *) args[1], strlen((char *) args[1])) || !strcmp((char *) args[1], ""))
       f->eax = -1;
     else
       {
