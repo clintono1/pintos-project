@@ -139,6 +139,13 @@ get_file (int fd)
   return fd_table[fd];
 }
 
+/* Removes the file at the fd index. Assumes that the syscall freed the file already. */
+void
+close_file (int fd)
+{
+  fd_table[fd] = NULL;
+}
+
 /* Returns the next unused fd. */
 int
 get_next_fd (void)

@@ -19,7 +19,6 @@ static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
   uint32_t* args = ((uint32_t*) f->esp);
-  address_is_valid (args, sizeof(args));
   if (args[0] == SYS_EXIT) {
     address_is_valid  (args[1], sizeof(args[1]));
     f->eax = args[1];
@@ -43,11 +42,21 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_OPEN) {
     // address_is_valid ((char *) args[1], sizeof((char *) args[1])); // Why is this passing without checking memory?
     char *file_name = (char *) args[1];
-    lock_filesys ();
-    struct file *file = filesys_open (filesys_open); // Create new file with initial size;
-    int fd = insert_file_to_fd_table (file);
-    release_filesys ();
-    f->eax = fd;
+    if (!address_is_valid ((char *) args[1], sizeof((char *) args[1])) || !strcmp((char *) args[1], ""))
+      f->eax = -1;
+    else
+      {
+        lock_filesys ();
+        struct file *file = filesys_open (file_name);
+        if (file)
+          {
+            int fd = insert_file_to_fd_table (file);
+            f->eax = fd;
+          }
+        else
+          f->eax = -1;
+        release_filesys ();
+      }
   } else if (args[0] == SYS_FILESIZE) {
     lock_filesys ();
     struct file *file = get_file (args[1]);
@@ -85,7 +94,11 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_CLOSE) {
     lock_filesys ();
     struct file *file = get_file (args[1]);
-    file_close (file);
+    if (file)
+      {
+        close_file (args[1]);
+        file_close (file);
+      }
     release_filesys ();
   }
 }
