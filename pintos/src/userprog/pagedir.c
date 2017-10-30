@@ -6,7 +6,6 @@
 #include "threads/pte.h"
 #include "threads/palloc.h"
 
-static uint32_t *active_pd (void);
 static void invalidate_pagedir (uint32_t *);
 
 /* Creates a new page directory that has mappings for kernel
@@ -231,7 +230,7 @@ pagedir_activate (uint32_t *pd)
 }
 
 /* Returns the currently active page directory. */
-static uint32_t *
+uint32_t *
 active_pd (void)
 {
   /* Copy CR3, the page directory base register (PDBR), into

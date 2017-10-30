@@ -8,6 +8,7 @@
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
 #include "userprog/process.h"
+#include "userprog/pagedir.h"
 
 static void syscall_handler (struct intr_frame *);
 int address_is_valid (char *, int size);
@@ -35,7 +36,9 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_CREATE) {
     // Check memory accesses for all below
     char *file_name = (char *) args[1];
-    if (!address_is_valid (file_name, strlen(file_name) + 1) || !strcmp(file_name, ""))
+    uint32_t pd = active_pd ();
+    void *mapped = pagedir_get_page (pd, file_name);
+    if (!mapped || !file_name || !address_is_valid (file_name, strlen(file_name) + 1) || !strcmp(file_name, ""))
       {
         current_thread->info->exit_code = -1;
         thread_exit();
@@ -46,7 +49,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     f->eax = created;
   } else if (args[0] == SYS_REMOVE) {
     char *file_name = (char *) args[1];
-    if (!address_is_valid (file_name, strlen(file_name) + 1))
+    uint32_t pd = active_pd ();
+    void *mapped = pagedir_get_page (pd, file_name);
+    if (!mapped || !file_name || !address_is_valid (file_name, strlen(file_name) + 1))
       {
         current_thread->info->exit_code = -1;
         thread_exit();
@@ -58,7 +63,10 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_OPEN) {
     // address_is_valid ((char *) args[1], sizeof((char *) args[1])); // Why is this passing without checking memory?
     char *file_name = (char *) args[1];
-    if (!address_is_valid ((char *) args[1], strlen((char *) args[1])) || !strcmp((char *) args[1], ""))
+    uint32_t pd = active_pd ();
+    void *mapped = pagedir_get_page (pd, file_name);
+    if (!mapped || !file_name || !address_is_valid ((char *) args[1],
+        strlen((char *) args[1])) || !strcmp((char *) args[1], ""))
       f->eax = -1;
     else
       {
@@ -138,7 +146,7 @@ syscall_handler (struct intr_frame *f UNUSED)
    1 if it didnt */
 int
 address_is_valid (char *addr, int size) {
-  if (addr == NULL || addr < 0x08048000 || !is_user_vaddr(addr + size)) {
+  if (addr < 0x08048000 || !is_user_vaddr(addr + size)) {
       // struct thread *current_thread = thread_current ();
       // current_thread->info->exit_code = -1;
       return 0;
