@@ -88,6 +88,7 @@ start_process (void *file_name_)
 
   /* Store arguments in thread stack */
   char **esp = &if_.esp;
+  // printf("pointer: %p\n", *esp);
   for (i = num_args - 1; i >= 0; i--) {
     *esp -= strlen(*(args + i)) + 1; // Count the null byte.
     strlcpy(*esp, *(args + i), strlen(*(args + i)) + 1);
