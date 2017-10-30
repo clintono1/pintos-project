@@ -65,15 +65,21 @@ start_process (void *file_name_)
 
   // Count the number of arguments passed in
   int num_args = 1;
-  char *ptr;
-  char *arg = strtok_r(file_name, " ", &ptr);
+  char *buf = (char *) malloc(1024);
+  char *ptr = buf;
+  strlcpy(ptr, file_name, strlen(file_name) + 1);
+  char *arg = strtok_r(ptr, " ", &ptr);
   while (arg = strtok_r(NULL, " ", &ptr)) {
     num_args += 1;
   }
+  free (buf);
   // Parse the args
-  int i = 0;
+  int i = 1 ;
   char *args[num_args];
-  for (arg = strtok_r(file_name, " ", &ptr); arg != NULL; arg = strtok_r(NULL, " ", &ptr)) {
+  char *ref = file_name;
+  arg = strtok_r(file_name, " ", &file_name);
+  args[0] = arg;
+  while (arg = strtok_r(NULL, " ", &file_name)) {
     args[i] = arg;
     i++;
   }
@@ -110,7 +116,7 @@ start_process (void *file_name_)
   **esp = NULL;
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
+  palloc_free_page (ref);
   if (!success)
     thread_exit ();
 
@@ -120,6 +126,7 @@ start_process (void *file_name_)
      arguments on the stack in the form of a `struct intr_frame',
      we just point the stack pointer (%esp) to our stack frame
      and jump to it. */
+  hex_dump (PHYS_BASE, *esp, (uintptr_t) PHYS_BASE - (uintptr_t) *esp, true);
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
