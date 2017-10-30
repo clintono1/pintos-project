@@ -257,11 +257,10 @@ thread_create (const char *name, int priority,
   // Save info passed in by parent to child thread.
   tid = t->tid = allocate_tid ();
   char *file_name;
-  if (!strcmp((char *) aux, "/////"))
+  if (*(char **) aux == "/////")
     {
-      struct exec_args *args = (struct exec_args *) aux;
-      t->info = args->info;
-      file_name = args->file_name;
+      file_name = ((char **) aux)[1];
+      t->info = (struct child_info *) (((char **) aux) [2]);
     }
   else
     {
