@@ -127,6 +127,7 @@ extern bool thread_mlfqs;
 
 int insert_file_to_fd_table (struct file *);
 struct file *get_file (int);
+void close_file (int);
 void lock_filesys (void);
 void release_filesys (void);
 

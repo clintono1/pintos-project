@@ -7,6 +7,7 @@
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
+#include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
@@ -382,6 +383,7 @@ thread_exit (void)
   // Turn off interrupts to ensure list functions don't break.
   intr_disable ();
   // Remove child info from the childrens list and free if parent is dead.
+  sema_up (current_thread->info->wait_semaphore);
   if (!current_thread->info->counter)
     {
       free (current_thread->info->process_loaded);
@@ -389,8 +391,6 @@ thread_exit (void)
       free (current_thread->info->wait_semaphore);
       free (current_thread->info);
     }
-  else
-      sema_up (current_thread->info->wait_semaphore);
   ASSERT (!intr_context ());
 
 #ifdef USERPROG

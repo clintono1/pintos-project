@@ -4,11 +4,13 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "filesys/file.h"
+#include "filesys/filesys.h"
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
 #include "userprog/process.h"
 
 static void syscall_handler (struct intr_frame *);
+int address_is_valid (char *, int size);
 
 void
 syscall_init (void)
@@ -21,29 +23,29 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
   uint32_t* args = ((uint32_t*) f->esp);
   if (!address_is_valid (args, sizeof(args))) {
-    printf("%s: exit(%d)\n", &thread_current ()->name, -1); // Change to exit code later on and print in thread_exit.
+    printf("%s: exit(%d)\n", (char *) &thread_current ()->name, -1); // Change to exit code later on and print in thread_exit.
     thread_exit();
   }
   struct thread *current_thread = thread_current();
   if (args[0] == SYS_EXIT) {
-    address_is_valid  (args[1], sizeof(args[1]));
+    // address_is_valid  (args[1], sizeof(args[1]));
     f->eax = args[1];
     printf("%s: exit(%d)\n", (char *) &thread_current ()->name, args[1]);
     current_thread->info->exit_code = args[1];
     thread_exit();
   } else if (args[0] == SYS_CREATE) {
     // Check memory accesses for all below
-    address_is_valid (args[1], sizeof((char *) args[1]));
     char *file_name = (char *) args[1];
+    address_is_valid (file_name, sizeof(file_name));
     lock_filesys ();
     bool created = filesys_create (file_name, 1024); // Create new file with initial size;
     release_filesys ();
     f->eax = created;
   } else if (args[0] == SYS_REMOVE) {
-    address_is_valid (args[1], sizeof((char *) args[1]));
     char *file_name = (char *) args[1];
+    address_is_valid (file_name, sizeof(file_name));
     lock_filesys ();
-    bool removed = filesys_create (file_name); // Create new file with initial size;
+    bool removed = filesys_remove (file_name); // Create new file with initial size;
     release_filesys ();
     f->eax = removed;
   } else if (args[0] == SYS_OPEN) {
@@ -70,22 +72,22 @@ syscall_handler (struct intr_frame *f UNUSED)
     f->eax = file_length (file);
     release_filesys ();
   } else if (args[0] == SYS_READ) {
-    address_is_valid (args[2], args[3]);
+    address_is_valid ((char *) args[2], args[3]);
     lock_filesys ();
     struct file *file = get_file (args[1]);
-    f->eax = file_read (file, args[2], args[3]);
+    f->eax = file_read (file, (char *) args[2], args[3]);
     release_filesys ();
   } else if (args[0] == SYS_WRITE) {
-    address_is_valid (args[2], args[3]);
+    address_is_valid ((char *) args[2], args[3]);
     lock_filesys ();
     if (args[1] == 1)
       {
-        putbuf(args[2], args[3]);
+        putbuf((char *) args[2], args[3]);
       }
     else
       {
         struct file *file = get_file (args[1]);
-        f->eax = file_write (file, args[2], args[3]);
+        f->eax = file_write (file, (char *) args[2], args[3]);
       }
     release_filesys ();
   } else if (args[0] == SYS_SEEK) {
@@ -119,7 +121,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     // wait for above to execute by:
     // trying to down a sempahore that will only be upped when process_execute is finished
   } else if (args[0] == SYS_WAIT) {
-    address_is_valid (args[1], sizeof(args[1]));
+    // address_is_valid (args[1], sizeof(args[1]));
     f->eax = process_wait(args[1]);
   }
 }

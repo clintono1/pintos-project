@@ -102,45 +102,44 @@ start_process (void *file_name_)
   }
 
   success = load (args[0], &if_.eip, &if_.esp);
-
-  /* Store arguments in thread stack */
-  char **esp = &if_.esp;
-  // printf("pointer: %p\n", *esp);
-  for (i = num_args - 1; i >= 0; i--) {
-    *esp -= strlen(*(args + i)) + 1; // Count the null byte.
-    strlcpy(*esp, *(args + i), strlen(*(args + i)) + 1);
-  }
-  // word align the stack pointer
-  int offset_to_word_align = ((uintptr_t) *esp) % 4;
-  int j;
-  for (j = 0; j < offset_to_word_align; j++) {
-    *esp -= 1;
-    **esp = 0;
-  }
-  *esp -= 4;
-  **esp = NULL;
-  // Store addresses of the args in the thread stack
-  uintptr_t addr = PHYS_BASE;
-  for (i = num_args - 1; i >= 0; i--) {
-    *esp -= 4;
-    addr -= strlen(*(args + i)) + 1;
-    *((unsigned int*)*esp) = (uintptr_t *) addr;
-  }
-  *esp -= 4;
-  *((unsigned int*)*esp) = (unsigned int *) (*esp + 4);
-  *esp -= sizeof(int);
-  *((int *) *esp) = num_args;
-  *esp -= 4;
-  **esp = NULL;
-
-  palloc_free_page (ref);
   struct thread *current_thread = thread_current();
-  /* If load failed, quit. */
   if (success)
     {
+      /* Store arguments in thread stack */
+      char **esp = &if_.esp;
+      // printf("pointer: %p\n", *esp);
+      for (i = num_args - 1; i >= 0; i--) {
+        *esp -= strlen(*(args + i)) + 1; // Count the null byte.
+        strlcpy(*esp, *(args + i), strlen(*(args + i)) + 1);
+      }
+      // word align the stack pointer
+      int offset_to_word_align = ((uintptr_t) *esp) % 4;
+      int j;
+      for (j = 0; j < offset_to_word_align; j++) {
+        *esp -= 1;
+        **esp = 0;
+      }
+      *esp -= 4;
+      **esp = NULL;
+      // Store addresses of the args in the thread stack
+      uintptr_t addr = PHYS_BASE;
+      for (i = num_args - 1; i >= 0; i--) {
+        *esp -= 4;
+        addr -= strlen(*(args + i)) + 1;
+        *((unsigned int*)*esp) = (uintptr_t *) addr;
+      }
+      *esp -= 4;
+      *((unsigned int*)*esp) = (unsigned int *) (*esp + 4);
+      *esp -= sizeof(int);
+      *((int *) *esp) = num_args;
+      *esp -= 4;
+      **esp = NULL;
+
+      palloc_free_page (ref);
       *(current_thread->info->process_loaded) = 1;
     }
   sema_up (current_thread->info->wait_child_exec);
+  /* If load failed, quit. */
   if (!success)
     thread_exit ();
 
