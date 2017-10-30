@@ -136,7 +136,9 @@ insert_file_to_fd_table (struct file *file)
 struct file *
 get_file (int fd)
 {
-  return fd_table[fd];
+  if (fd >= 0 && fd < 128)
+    return fd_table[fd];
+  return NULL;
 }
 
 /* Removes the file at the fd index. Assumes that the syscall freed the file already. */
