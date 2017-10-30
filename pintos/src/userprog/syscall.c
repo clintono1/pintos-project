@@ -5,7 +5,8 @@
 #include "threads/thread.h"
 #include "filesys/file.h"
 #include "threads/vaddr.h"
-
+#include "devices/shutdown.h"
+#include "userprog/process.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -23,10 +24,12 @@ syscall_handler (struct intr_frame *f UNUSED)
     printf("%s: exit(%d)\n", &thread_current ()->name, -1); // Change to exit code later on and print in thread_exit.
     thread_exit();
   }
+  struct thread *current_thread = thread_current();
   if (args[0] == SYS_EXIT) {
     address_is_valid  (args[1], sizeof(args[1]));
     f->eax = args[1];
-    printf("%s: exit(%d)\n", &thread_current ()->name, args[1]);
+    printf("%s: exit(%d)\n", (char *) &thread_current ()->name, args[1]);
+    current_thread->info->exit_code = args[1];
     thread_exit();
   } else if (args[0] == SYS_CREATE) {
     // Check memory accesses for all below
@@ -104,6 +107,20 @@ syscall_handler (struct intr_frame *f UNUSED)
         file_close (file);
       }
     release_filesys ();
+  } else if (args[0] == SYS_PRACTICE) {
+    check_memory_access (args[1], sizeof(args[1]));
+    f->eax = args[1] + 1;
+  } else if (args[0] == SYS_HALT) {
+    shutdown_power_off();
+  } else if (args[0] == SYS_EXEC) {
+    check_memory_access (args[1], sizeof((char *) args[1]));
+    // add in a semaphore to args[1], which is the filename/arguments to be executed
+    process_execute((char *) args[1]);
+    // wait for above to execute by:
+    // trying to down a sempahore that will only be upped when process_execute is finished
+  } else if (args[0] == SYS_WAIT) {
+    check_memory_access (args[1], sizeof(args[1]));
+    f->eax = process_wait(args[1]);
   }
 }
 
@@ -116,5 +133,3 @@ address_is_valid (char *addr, int size) {
       // struct thread *current_thread = thread_current ();
       // current_thread->info->exit_code = -1;
       return 0;
-  }
-}

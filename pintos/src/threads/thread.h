@@ -20,6 +20,7 @@ enum thread_status
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
+typedef int pid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
 /* Thread priorities. */
@@ -95,6 +96,8 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    struct child_info *info;            /* A struct used to return child info to parent */
+    struct list children;               /* List of all of this thread's children's child info */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -105,6 +108,18 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
   };
 
+struct child_info
+  {
+    /* Used to pass info between parent and child thread */
+    struct semaphore *wait_semaphore;
+    struct semaphore *wait_child_exec;   /* A reference to the semaphore used to release parent from
+                                            waiting for child to finish loading */
+    int *process_loaded;
+    int exit_code;
+    pid_t pid;
+    struct list_elem elem;
+    int counter;
+  };
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
