@@ -110,7 +110,9 @@ struct thread
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
-int insert_file_to_fd_table (int, struct file *);
+int insert_file_to_fd_table (struct file *);
+void lock_filesys (void);
+void release_filesys (void);
 
 void thread_init (void);
 void thread_start (void);

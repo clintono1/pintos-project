@@ -75,6 +75,9 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+int find_first_unused_fd (void);
+int get_next_fd (void);
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -105,9 +108,21 @@ thread_init (void)
   initial_thread->tid = allocate_tid ();
 }
 
+void
+lock_filesys (void)
+{
+  lock_acquire (&filesys_lock);
+}
+
+void
+release_filesys (void)
+{
+  lock_release (&filesys_lock);
+}
+
 /* Insert file object into the specified position. Returns the fd (index) */
 int
-insert_file_to_fd_table (int i, struct file *file)
+insert_file_to_fd_table (struct file *file)
 {
   int index = get_next_fd ();
   fd_table[index] = file;
@@ -115,11 +130,12 @@ insert_file_to_fd_table (int i, struct file *file)
 }
 
 /* Returns the next unused fd. */
-void
+int
 get_next_fd (void)
 {
   latest_fd += 1;
   latest_fd = find_first_unused_fd ();
+  return latest_fd;
 }
 
 /* Iterates through the fd_table starting from latest_fd
@@ -129,13 +145,12 @@ find_first_unused_fd (void)
 {
   int i;
   for (i = latest_fd; i < 128; i++)
-    {
       if (fd_table[i] == NULL)
         return i;
-    }
   for (i = 0; i < 128; i++)
     if (fd_table[i] == NULL)
       return i;
+  return 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
