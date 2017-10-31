@@ -148,7 +148,14 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_HALT) {
     shutdown_power_off();
   } else if (args[0] == SYS_EXEC) {
-    address_is_valid (args[1], sizeof((char *) args[1]));
+    char *file_name = (char *) args[1];
+    uint32_t pd = active_pd ();
+    void *mapped = pagedir_get_page (pd, file_name);
+    if (!mapped || !file_name || !address_is_valid ((char *) args[1], strlen((char *) args[1])))
+      {
+        current_thread->info->exit_code = -1;
+        thread_exit();
+      }
     // add in a semaphore to args[1], which is the filename/arguments to be executed
     f->eax = process_execute((char *) args[1]);
     // wait for above to execute by:
