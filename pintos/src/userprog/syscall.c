@@ -9,6 +9,7 @@
 #include "devices/shutdown.h"
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
+#include "lib/stdbool.h"
 
 static void syscall_handler (struct intr_frame *);
 int address_is_valid (char *, int size);
@@ -90,7 +91,10 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_FILESIZE) {
     lock_filesys ();
     struct file *file = get_file (args[1]);
-    f->eax = file_length (file);
+    if (file)
+      f->eax = file_length (file);
+    else
+      f->eax = -1;
     release_filesys ();
   } else if (args[0] == SYS_READ) {
     uint32_t pd = active_pd ();
@@ -138,7 +142,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_CLOSE) {
     lock_filesys ();
     struct file *file = get_file (args[1]);
-    if (file)
+    if (file && !file->deny_write)
       {
         close_file (args[1]);
         file_close (file);

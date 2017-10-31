@@ -390,6 +390,7 @@ thread_exit (void)
       free (current_thread->info->wait_semaphore);
       free (current_thread->info);
     }
+  file_close (current_thread->executable);
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
