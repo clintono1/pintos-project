@@ -99,6 +99,8 @@ struct thread
     struct child_info *info;            /* A struct used to return child info to parent */
     struct list children;               /* List of all of this thread's children's child info */
     struct file *executable;            /* Keep track of your own executable */
+    struct file *fd_table[128];         /* File descriptor table */
+    int latest_fd;                      /* Keep track of the latest file descriptor used; */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -128,7 +130,7 @@ extern bool thread_mlfqs;
 
 int insert_file_to_fd_table (struct file *);
 struct file *get_file (int);
-int close_file (int);
+void close_file (int);
 void lock_filesys (void);
 void release_filesys (void);
 

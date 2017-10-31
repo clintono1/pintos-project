@@ -27,12 +27,11 @@ syscall_handler (struct intr_frame *f UNUSED)
   uint32_t* args = ((uint32_t*) f->esp);
   uint32_t args_pd = active_pd ();
   void *args_mapped = pagedir_get_page (args_pd, args);
-  if (!f || !args_mapped || !address_is_valid (args, sizeof(args))) {
+  if (!f || !args_mapped || !address_is_valid (args, sizeof (args))) {
     current_thread->info->exit_code = -1;
     thread_exit();
   }
   if (args[0] == SYS_EXIT) {
-    // address_is_valid  (args[1], sizeof(args[1]));
     f->eax = args[1];
     current_thread->info->exit_code = args[1];
     thread_exit();
@@ -64,7 +63,6 @@ syscall_handler (struct intr_frame *f UNUSED)
     release_filesys ();
     f->eax = removed;
   } else if (args[0] == SYS_OPEN) {
-    // address_is_valid ((char *) args[1], sizeof((char *) args[1])); // Why is this passing without checking memory?
     char *file_name = (char *) args[1];
     uint32_t pd = active_pd ();
     void *mapped = pagedir_get_page (pd, file_name);
@@ -98,8 +96,8 @@ syscall_handler (struct intr_frame *f UNUSED)
     release_filesys ();
   } else if (args[0] == SYS_READ) {
     uint32_t pd = active_pd ();
-    if (!address_is_valid ((char *) args[2], args[3]) || !pagedir_get_page (pd, args[2]) ||
-        args[1] == 1)
+    if (!address_is_valid ((char *) args[2], args[3]) ||
+        !pagedir_get_page (pd, args[2]) || args[1] == 1)
       {
         current_thread->info->exit_code = -1;
         thread_exit();
@@ -129,9 +127,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
     lock_filesys ();
     if (args[3] < 0)
-      {
         f->eax = -1;
-      }
     if (args[1] == 1)
       {
         char *ptr = (char *) args[2];
@@ -139,8 +135,8 @@ syscall_handler (struct intr_frame *f UNUSED)
         while (bytes_to_read > 0)
           {
             putbuf(ptr, bytes_to_read);
-            bytes_to_read -= 256;
-            ptr += 256;
+            bytes_to_read -= 512;
+            ptr += 512;
           }
         f->eax = args[3];
       }
@@ -154,22 +150,22 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_SEEK) {
     lock_filesys ();
     struct file *file = get_file (args[1]);
-    file_seek (file, args[2]);
+    if (file)
+      file_seek (file, args[2]);
     release_filesys ();
   } else if (args[0] == SYS_TELL) {
     lock_filesys ();
     struct file *file = get_file (args[1]);
-    f->eax = file_tell (file);
+    if (file)
+      f->eax = file_tell (file);
+    else
+      f->eax = -1;
     release_filesys ();
   } else if (args[0] == SYS_CLOSE) {
     lock_filesys ();
     struct file *file = get_file (args[1]);
     if (file && !file->deny_write)
-      {
-        int should_free = close_file (args[1]);
-        if (should_free)
-          file_close (file);
-      }
+      close_file (args[1]);
     release_filesys ();
   } else if (args[0] == SYS_PRACTICE) {
     address_is_valid (args[1], sizeof(args[1]));
@@ -185,12 +181,8 @@ syscall_handler (struct intr_frame *f UNUSED)
         current_thread->info->exit_code = -1;
         thread_exit();
       }
-    // add in a semaphore to args[1], which is the filename/arguments to be executed
     f->eax = process_execute((char *) args[1]);
-    // wait for above to execute by:
-    // trying to down a sempahore that will only be upped when process_execute is finished
   } else if (args[0] == SYS_WAIT) {
-    // address_is_valid (args[1], sizeof(args[1]));
     f->eax = process_wait(args[1]);
   }
 }
@@ -201,8 +193,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 int
 address_is_valid (char *addr, int size) {
   if (addr < 0x08048000 || !is_user_vaddr(addr + size)) {
-      // struct thread *current_thread = thread_current ();
-      // current_thread->info->exit_code = -1;
       return 0;
+  } else {
+    return 1;
   }
 }

@@ -184,10 +184,12 @@ process_wait (pid_t pid)
         exit_code = c_info->exit_code;
         list_remove (&c_info->elem);
         if (!c_info->counter)
-          free (c_info->process_loaded);
-          free (c_info->wait_child_exec);
-          free (c_info->wait_semaphore);
-          free (c_info);
+          {
+            free (c_info->process_loaded);
+            free (c_info->wait_child_exec);
+            free (c_info->wait_semaphore);
+            free (c_info);
+          }
         break;
       }
     }

@@ -38,16 +38,7 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
-struct file_info
-  {
-    struct file *file;
-    tid_t belongs_to;
-    int num_accessors;
-  };
-
 struct lock filesys_lock;
-struct file_info *fd_table[128];
-int latest_fd = 0;
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame
@@ -109,10 +100,6 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
   lock_init (&filesys_lock);
-  latest_fd = 2; // First three should be taken by stdin, stdout, stderr.
-  struct file_info *dummy;
-  // Populate first three so they aren't overwritten. Do not try to access them.
-  fd_table[0] = fd_table[1] = fd_table[2] = dummy;
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -139,47 +126,36 @@ insert_file_to_fd_table (struct file *file)
 {
   int index = get_next_fd ();
   struct thread *current_thread = thread_current();
-  struct file_info *info = malloc(sizeof(struct file_info));
-  info->file = file;
-  info->belongs_to = current_thread->tid;
-  info->num_accessors = 1;
-  fd_table[index] = info;
+  current_thread->fd_table[index] = file;
   return index;
 }
 
 struct file *
 get_file (int fd)
 {
-  if (fd >= 0 && fd < 128)
-    if (fd_table[fd])
-      return fd_table[fd]->file;
+  if (fd >= 2 && fd < 128)
+    return thread_current()->fd_table[fd];
   return NULL;
 }
 
-/* Removes an accessor from the file object. Returns 1 if it
-   should be freed and 0 if it should not. */
-int
+/* Removes the file object from the processe's fd table */
+void
 close_file (int fd)
 {
-  if (fd_table[fd])
-    {
-      if (thread_current()->tid != fd_table[fd]->belongs_to)
-        return 0;
-      fd_table[fd]->num_accessors--;
-      if (!fd_table[fd]->num_accessors)
-        fd_table[fd] = NULL;
-        return 1;
-    }
-  return 0;
+  struct thread *current_thread = thread_current();
+  if (current_thread->fd_table[fd])
+      file_close (current_thread->fd_table[fd]);
+  current_thread->fd_table[fd] = NULL;
 }
 
 /* Returns the next unused fd. */
 int
 get_next_fd (void)
 {
-  latest_fd += 1;
-  latest_fd = find_first_unused_fd ();
-  return latest_fd;
+  struct thread *current_thread = thread_current();
+  current_thread->latest_fd += 1;
+  current_thread->latest_fd = find_first_unused_fd ();
+  return current_thread->latest_fd;
 }
 
 /* Iterates through the fd_table starting from latest_fd
@@ -188,11 +164,12 @@ int
 find_first_unused_fd (void)
 {
   int i;
-  for (i = latest_fd; i < 128; i++)
-      if (fd_table[i] == NULL)
+  struct thread *current_thread = thread_current();
+  for (i = current_thread->latest_fd; i < 128; i++)
+      if (current_thread->fd_table[i] == NULL)
         return i;
-  for (i = 0; i < 128; i++)
-    if (fd_table[i] == NULL)
+  for (i = 2; i < 128; i++)
+    if (current_thread->fd_table[i] == NULL)
       return i;
   return 0;
 }
@@ -438,10 +415,10 @@ free_thread_files (void)
   struct thread *current_thread = thread_current ();
   for (i = 3; i < 128; i++)
     {
-      if (fd_table[i] && fd_table[i]->belongs_to == current_thread->tid)
+      if (current_thread->fd_table[i])
         {
-          file_close(fd_table[i]->file);
-          fd_table[i] = NULL;
+          file_close(current_thread->fd_table[i]);
+          current_thread->fd_table[i] = NULL;
         }
 
     }
@@ -613,6 +590,10 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->latest_fd = 2; // First three should be taken by stdin, stdout, stderr.
+  struct file *dummy;
+  // Populate first three so they aren't overwritten. Do not try to access them.
+  t->fd_table[0] = t->fd_table[1] = dummy;
   list_init (&t->children);
   t->magic = THREAD_MAGIC;
 
