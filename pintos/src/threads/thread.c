@@ -80,6 +80,7 @@ static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
+void free_thread_files (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
@@ -155,11 +156,21 @@ get_file (int fd)
   return NULL;
 }
 
-/* Removes the file at the fd index. Assumes that the syscall freed the file already. */
-void
+/* Removes an accessor from the file object. Returns 1 if it
+   should be freed and 0 if it should not. */
+int
 close_file (int fd)
 {
-  fd_table[fd] = NULL;
+  if (fd_table[fd])
+    {
+      if (thread_current()->tid != fd_table[fd]->belongs_to)
+        return 0;
+      fd_table[fd]->num_accessors--;
+      if (!fd_table[fd]->num_accessors)
+        fd_table[fd] = NULL;
+        return 1;
+    }
+  return 0;
 }
 
 /* Returns the next unused fd. */
@@ -404,6 +415,7 @@ thread_exit (void)
       free (current_thread->info);
     }
   file_close (current_thread->executable);
+  free_thread_files ();
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
@@ -417,6 +429,22 @@ thread_exit (void)
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
+}
+
+void
+free_thread_files (void)
+{
+  int i;
+  struct thread *current_thread = thread_current ();
+  for (i = 3; i < 128; i++)
+    {
+      if (fd_table[i] && fd_table[i]->belongs_to == current_thread->tid)
+        {
+          file_close(fd_table[i]->file);
+          fd_table[i] = NULL;
+        }
+
+    }
 }
 
 /* Yields the CPU.  The current thread is not put to sleep and

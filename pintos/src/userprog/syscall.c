@@ -105,6 +105,16 @@ syscall_handler (struct intr_frame *f UNUSED)
         thread_exit();
       }
     lock_filesys ();
+    if (args[1] == 0)
+      {
+        char arr[args[3]];
+        int i = 0;
+        for (i = 0; i < args[3]; i++)
+          {
+            arr[i] = input_getc();
+          }
+        memcpy(args[2], arr, args[3]);
+      }
     struct file *file = get_file (args[1]);
     if (file)
       f->eax = file_read (file, (char *) args[2], args[3]);
@@ -118,9 +128,21 @@ syscall_handler (struct intr_frame *f UNUSED)
         thread_exit();
       }
     lock_filesys ();
+    if (args[3] < 0)
+      {
+        f->eax = -1;
+      }
     if (args[1] == 1)
       {
-        putbuf((char *) args[2], args[3]);
+        char *ptr = (char *) args[2];
+        int bytes_to_read = args[3];
+        while (bytes_to_read > 0)
+          {
+            putbuf(ptr, bytes_to_read);
+            bytes_to_read -= 256;
+            ptr += 256;
+          }
+        f->eax = args[3];
       }
     else
       {
@@ -144,8 +166,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     struct file *file = get_file (args[1]);
     if (file && !file->deny_write)
       {
-        close_file (args[1]);
-        file_close (file);
+        int should_free = close_file (args[1]);
+        if (should_free)
+          file_close (file);
       }
     release_filesys ();
   } else if (args[0] == SYS_PRACTICE) {
