@@ -98,6 +98,7 @@ struct thread
     struct list_elem elem;              /* List element. */
     struct child_info *info;            /* A struct used to return child info to parent */
     struct list children;               /* List of all of this thread's children's child info */
+    struct file *executable;            /* Keep track of your own executable */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

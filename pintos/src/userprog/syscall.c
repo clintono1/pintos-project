@@ -9,6 +9,7 @@
 #include "devices/shutdown.h"
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
+#include "lib/stdbool.h"
 
 static void syscall_handler (struct intr_frame *);
 int address_is_valid (char *, int size);
@@ -25,6 +26,11 @@ syscall_handler (struct intr_frame *f UNUSED)
   struct thread *current_thread = thread_current();
   uint32_t* args = ((uint32_t*) f->esp);
   uint32_t args_pd = active_pd ();
+    // if (!address_is_valid((char **) args, 0) || !address_is_valid((char **) args, sizeof(args)))
+    //   {
+    //     current_thread->info->exit_code = -1;
+    //     thread_exit();
+    //   }
   void *args_mapped = pagedir_get_page (args_pd, args);
   if (!f || !args_mapped || !address_is_valid (args, sizeof(args))) {
     current_thread->info->exit_code = -1;
@@ -39,6 +45,11 @@ syscall_handler (struct intr_frame *f UNUSED)
     // Check memory accesses for all below
     char *file_name = (char *) args[1];
     uint32_t pd = active_pd ();
+    // if (!address_is_valid((char *) args[1], 0) || !address_is_valid ((char *) args[1], strlen(args[1]) + 1))
+    //   {
+    //     current_thread->info->exit_code = -1;
+    //     thread_exit();
+    //   }
     void *mapped = pagedir_get_page (pd, file_name);
     if (!mapped || !file_name || !address_is_valid (file_name, strlen(file_name) + 1) || !strcmp(file_name, ""))
       {
@@ -52,6 +63,11 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_REMOVE) {
     char *file_name = (char *) args[1];
     uint32_t pd = active_pd ();
+    // if (!address_is_valid((char *) args[1], 0) || !address_is_valid ((char *) args[1], strlen(args[1]) + 1))
+    //   {
+    //     current_thread->info->exit_code = -1;
+    //     thread_exit();
+    //   }
     void *mapped = pagedir_get_page (pd, file_name);
     if (!mapped || !file_name || !address_is_valid (file_name, strlen(file_name) + 1))
       {
@@ -66,6 +82,11 @@ syscall_handler (struct intr_frame *f UNUSED)
     // address_is_valid ((char *) args[1], sizeof((char *) args[1])); // Why is this passing without checking memory?
     char *file_name = (char *) args[1];
     uint32_t pd = active_pd ();
+    // if (!address_is_valid((char *) args[1], 0) || !address_is_valid ((char *) args[1], strlen(args[1]) + 1))
+    //   {
+    //     current_thread->info->exit_code = -1;
+    //     thread_exit();
+    //   }
     void *mapped = pagedir_get_page (pd, file_name);
     if (!mapped || !file_name || !address_is_valid ((char *) args[1], strlen((char *) args[1])))
       {
@@ -90,10 +111,18 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_FILESIZE) {
     lock_filesys ();
     struct file *file = get_file (args[1]);
-    f->eax = file_length (file);
+    if (file)
+      f->eax = file_length (file);
+    else
+      f->eax = -1;
     release_filesys ();
   } else if (args[0] == SYS_READ) {
     uint32_t pd = active_pd ();
+    // if (!address_is_valid((char *) args[2], 0) || !address_is_valid ((char *) args[2], strlen(args[2]) + 1))
+    //   {
+    //     current_thread->info->exit_code = -1;
+    //     thread_exit();
+    //   }
     if (!address_is_valid ((char *) args[2], args[3]) || !pagedir_get_page (pd, args[2]) ||
         args[1] == 1)
       {
@@ -107,6 +136,11 @@ syscall_handler (struct intr_frame *f UNUSED)
     release_filesys ();
   } else if (args[0] == SYS_WRITE) {
     uint32_t pd = active_pd ();
+    // if (!address_is_valid((char *) args[2], 0) || !address_is_valid ((char *) args[2], strlen(args[2]) + 1))
+    //   {
+    //     current_thread->info->exit_code = -1;
+    //     thread_exit();
+    //   }
     if (!address_is_valid ((char *) args[2], args[3]) || !pagedir_get_page (pd, args[2]) ||
         args[1] == 0)
       {
@@ -138,7 +172,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_CLOSE) {
     lock_filesys ();
     struct file *file = get_file (args[1]);
-    if (file)
+    if (file && !file->deny_write)
       {
         close_file (args[1]);
         file_close (file);
@@ -152,6 +186,11 @@ syscall_handler (struct intr_frame *f UNUSED)
   } else if (args[0] == SYS_EXEC) {
     char *file_name = (char *) args[1];
     uint32_t pd = active_pd ();
+    // if (!address_is_valid((char *) args[1], 0) || !address_is_valid ((char *) args[1], strlen(args[1]) + 1))
+      // {
+      //   current_thread->info->exit_code = -1;
+      //   thread_exit();
+      // }
     void *mapped = pagedir_get_page (pd, file_name);
     if (!mapped || !file_name || !address_is_valid ((char *) args[1], strlen((char *) args[1])))
       {
