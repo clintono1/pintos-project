@@ -288,10 +288,10 @@ thread_create (const char *name, int priority,
     }
   else
     {
-      struct child_info *info = (struct child_info *) malloc(sizeof(struct child_info));
-      info->wait_semaphore = (struct semaphore *) malloc(sizeof(struct semaphore));
-      info->wait_child_exec = (struct semaphore *) malloc(sizeof(struct semaphore));
-      info->process_loaded = (int *) malloc(sizeof(int));
+      struct child_info *info = (struct child_info *) malloc (sizeof (struct child_info));
+      info->wait_semaphore = (struct semaphore *) malloc (sizeof (struct semaphore));
+      info->wait_child_exec = (struct semaphore *) malloc (sizeof (struct semaphore));
+      info->process_loaded = (int *) malloc (sizeof (int));
       sema_init (info->wait_semaphore, 0);
       sema_init (info->wait_child_exec, 0);
       *(info->process_loaded) = 0;
@@ -399,7 +399,7 @@ thread_tid (void)
 void
 thread_exit (void)
 {
-  struct thread *current_thread = thread_current();
+  struct thread *current_thread = thread_current ();
   if (*current_thread->info->process_loaded)
     printf("%s: exit(%d)\n", (char *) current_thread->name, current_thread->info->exit_code);
   current_thread->info->counter--;
