@@ -1,3 +1,6 @@
+/* Sets the stack pointer to a NULL pointer.
+   The process must be terminated with -1 exit code. */
+
 #include "tests/lib.h"
 #include "tests/main.h"
 

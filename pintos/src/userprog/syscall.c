@@ -46,7 +46,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         thread_exit();
       }
     lock_filesys ();
-    bool created = filesys_create (file_name, 1024); // Create new file with initial size;
+    bool created = filesys_create (file_name, args[2]); // Create new file with initial size;
     release_filesys ();
     f->eax = created;
   } else if (args[0] == SYS_REMOVE) {
