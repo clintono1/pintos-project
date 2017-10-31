@@ -31,11 +31,11 @@ tid_t
 process_execute (const char *file_name)
 {
   tid_t tid;
-  struct thread *current_thread = thread_current();
-  struct child_info* info = (struct child_info *) malloc(sizeof(struct child_info));
-  info->wait_semaphore = (struct semaphore *) malloc(sizeof(struct semaphore));
-  info->wait_child_exec = (struct semaphore *) malloc(sizeof(struct semaphore));
-  info->process_loaded = (int *) malloc(sizeof(int));
+  struct thread *current_thread = thread_current ();
+  struct child_info* info = (struct child_info *) malloc (sizeof (struct child_info));
+  info->wait_semaphore = (struct semaphore *) malloc (sizeof (struct semaphore));
+  info->wait_child_exec = (struct semaphore *) malloc (sizeof (struct semaphore));
+  info->process_loaded = (int *) malloc (sizeof (int));
   // Set up child_info struct for the child so we can save it in parent.
   void *args[3];
   *(info->process_loaded) = 0;
@@ -84,21 +84,22 @@ start_process (void *file_name_)
 
   // Count the number of arguments passed in
   int num_args = 1;
-  char *buf = (char *) malloc(1024);
+  char *buf = (char *) malloc (1024);
   char *ptr = buf;
-  strlcpy(ptr, file_name, strlen(file_name) + 1);
-  char *arg = strtok_r(ptr, " ", &ptr);
-  while (arg = strtok_r(NULL, " ", &ptr)) {
+  strlcpy (ptr, file_name, strlen (file_name) + 1);
+  char *arg = strtok_r (ptr, " ", &ptr);
+  while (arg = strtok_r (NULL, " ", &ptr)) {
     num_args += 1;
   }
   free (buf);
+
   // Parse the args
   int i = 1 ;
   char *args[num_args];
   char *ref = file_name;
-  arg = strtok_r(file_name, " ", &file_name);
+  arg = strtok_r (file_name, " ", &file_name);
   args[0] = arg;
-  while (arg = strtok_r(NULL, " ", &file_name)) {
+  while (arg = strtok_r (NULL, " ", &file_name)) {
     args[i] = arg;
     i++;
   }
@@ -111,8 +112,8 @@ start_process (void *file_name_)
       char **esp = &if_.esp;
       // printf("pointer: %p\n", *esp);
       for (i = num_args - 1; i >= 0; i--) {
-        *esp -= strlen(*(args + i)) + 1; // Count the null byte.
-        strlcpy(*esp, *(args + i), strlen(*(args + i)) + 1);
+        *esp -= strlen (*(args + i)) + 1; // Count the null byte.
+        strlcpy (*esp, *(args + i), strlen (*(args + i)) + 1);
       }
       // word align the stack pointer
       int offset_to_word_align = ((uintptr_t) *esp) % 4;
@@ -127,12 +128,12 @@ start_process (void *file_name_)
       uintptr_t addr = PHYS_BASE;
       for (i = num_args - 1; i >= 0; i--) {
         *esp -= 4;
-        addr -= strlen(*(args + i)) + 1;
-        *((unsigned int*)*esp) = (uintptr_t *) addr;
+        addr -= strlen (*(args + i)) + 1;
+        *((unsigned int*) *esp) = (uintptr_t *) addr;
       }
       *esp -= 4;
-      *((unsigned int*)*esp) = (unsigned int *) (*esp + 4);
-      *esp -= sizeof(int);
+      *((unsigned int*) *esp) = (unsigned int *) (*esp + 4);
+      *esp -= sizeof (int);
       *((int *) *esp) = num_args;
       *esp -= 4;
       **esp = NULL;
@@ -172,26 +173,27 @@ process_wait (pid_t pid)
   // Turn off interupts while iterating over list
   struct list_elem *e;
   int exit_code = -1;
-  struct thread *current_thread = thread_current();
+  struct thread *current_thread = thread_current ();
   enum intr_level old_level = intr_disable ();
   for (e = list_begin (&current_thread->children); e != list_end (&current_thread->children);
        e = list_next (e))
     {
       struct child_info *c_info = list_entry (e, struct child_info, elem);
-      if (c_info->pid == pid) {
-        sema_down (c_info->wait_semaphore);
-        c_info->counter--;
-        exit_code = c_info->exit_code;
-        list_remove (&c_info->elem);
-        if (!c_info->counter)
-          {
-            free (c_info->process_loaded);
-            free (c_info->wait_child_exec);
-            free (c_info->wait_semaphore);
-            free (c_info);
-          }
-        break;
-      }
+      if (c_info->pid == pid)
+        {
+          sema_down (c_info->wait_semaphore);
+          c_info->counter--;
+          exit_code = c_info->exit_code;
+          list_remove (&c_info->elem);
+          if (!c_info->counter)
+            {
+              free (c_info->process_loaded);
+              free (c_info->wait_child_exec);
+              free (c_info->wait_semaphore);
+              free (c_info);
+            }
+          break;
+        }
     }
   intr_set_level (old_level);
   // printf("wait(exec()) = %ld\n", pid);
