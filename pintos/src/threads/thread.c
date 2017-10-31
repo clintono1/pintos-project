@@ -38,8 +38,15 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+struct file_info
+  {
+    struct file *file;
+    tid_t belongs_to;
+    int num_accessors;
+  };
+
 struct lock filesys_lock;
-struct file *fd_table[128];
+struct file_info *fd_table[128];
 int latest_fd = 0;
 
 /* Stack frame for kernel_thread(). */
@@ -102,9 +109,9 @@ thread_init (void)
   list_init (&all_list);
   lock_init (&filesys_lock);
   latest_fd = 2; // First three should be taken by stdin, stdout, stderr.
-  struct file *dummyFile;
+  struct file_info *dummy;
   // Populate first three so they aren't overwritten. Do not try to access them.
-  fd_table[0] = fd_table[1] = fd_table[2] = dummyFile;
+  fd_table[0] = fd_table[1] = fd_table[2] = dummy;
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -130,7 +137,12 @@ int
 insert_file_to_fd_table (struct file *file)
 {
   int index = get_next_fd ();
-  fd_table[index] = file;
+  struct thread *current_thread = thread_current();
+  struct file_info *info = malloc(sizeof(struct file_info));
+  info->file = file;
+  info->belongs_to = current_thread->tid;
+  info->num_accessors = 1;
+  fd_table[index] = info;
   return index;
 }
 
@@ -138,7 +150,8 @@ struct file *
 get_file (int fd)
 {
   if (fd >= 0 && fd < 128)
-    return fd_table[fd];
+    if (fd_table[fd])
+      return fd_table[fd]->file;
   return NULL;
 }
 
