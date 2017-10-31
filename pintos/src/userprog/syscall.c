@@ -24,7 +24,9 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
   struct thread *current_thread = thread_current();
   uint32_t* args = ((uint32_t*) f->esp);
-  if (!address_is_valid (args, sizeof(args))) {
+  uint32_t args_pd = active_pd ();
+  void *args_mapped = pagedir_get_page (args_pd, args);
+  if (!f || !args_mapped || !address_is_valid (args, sizeof(args))) {
     current_thread->info->exit_code = -1;
     thread_exit();
   }
