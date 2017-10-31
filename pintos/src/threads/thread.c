@@ -376,7 +376,8 @@ void
 thread_exit (void)
 {
   struct thread *current_thread = thread_current();
-  printf("%s: exit(%d)\n", (char *) current_thread->name, current_thread->info->exit_code);
+  if (*current_thread->info->process_loaded)
+    printf("%s: exit(%d)\n", (char *) current_thread->name, current_thread->info->exit_code);
   current_thread->info->counter--;
   // Turn off interrupts to ensure list functions don't break.
   intr_disable ();

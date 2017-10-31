@@ -57,7 +57,7 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (strtok_r(file_ptr, " ", &file_ptr), PRI_DEFAULT, start_process, &args);
   sema_down (info->wait_child_exec);
-  if (tid == TID_ERROR || !info->process_loaded)
+  if (tid == TID_ERROR || !*info->process_loaded)
     {
       tid = TID_ERROR;
       palloc_free_page (args[1]);
@@ -330,7 +330,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open (file_name);
   if (file == NULL)
     {
-      printf ("load: %s: open failed\n", file_name);
       goto done;
     }
 
