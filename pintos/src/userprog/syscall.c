@@ -65,8 +65,12 @@ syscall_handler (struct intr_frame *f UNUSED)
     char *file_name = (char *) args[1];
     uint32_t pd = active_pd ();
     void *mapped = pagedir_get_page (pd, file_name);
-    if (!mapped || !file_name || !address_is_valid ((char *) args[1],
-        strlen((char *) args[1])) || !strcmp((char *) args[1], ""))
+    if (!mapped || !file_name || !address_is_valid ((char *) args[1], strlen((char *) args[1])))
+      {
+        current_thread->info->exit_code = -1;
+        thread_exit();
+      }
+    else if (!strcmp((char *) args[1], ""))
       f->eax = -1;
     else
       {
@@ -87,13 +91,26 @@ syscall_handler (struct intr_frame *f UNUSED)
     f->eax = file_length (file);
     release_filesys ();
   } else if (args[0] == SYS_READ) {
-    address_is_valid ((char *) args[2], args[3]);
+    uint32_t pd = active_pd ();
+    if (!address_is_valid ((char *) args[2], args[3]) || !pagedir_get_page (pd, args[2]) ||
+        args[1] == 1)
+      {
+        current_thread->info->exit_code = -1;
+        thread_exit();
+      }
     lock_filesys ();
     struct file *file = get_file (args[1]);
-    f->eax = file_read (file, (char *) args[2], args[3]);
+    if (file)
+      f->eax = file_read (file, (char *) args[2], args[3]);
     release_filesys ();
   } else if (args[0] == SYS_WRITE) {
-    address_is_valid ((char *) args[2], args[3]);
+    uint32_t pd = active_pd ();
+    if (!address_is_valid ((char *) args[2], args[3]) || !pagedir_get_page (pd, args[2]) ||
+        args[1] == 0)
+      {
+        current_thread->info->exit_code = -1;
+        thread_exit();
+      }
     lock_filesys ();
     if (args[1] == 1)
       {
@@ -102,7 +119,8 @@ syscall_handler (struct intr_frame *f UNUSED)
     else
       {
         struct file *file = get_file (args[1]);
-        f->eax = file_write (file, (char *) args[2], args[3]);
+        if (file)
+          f->eax = file_write (file, (char *) args[2], args[3]);
       }
     release_filesys ();
   } else if (args[0] == SYS_SEEK) {

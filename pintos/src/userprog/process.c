@@ -51,9 +51,11 @@ process_execute (const char *file_name)
   if (args[1] == NULL)
     return TID_ERROR;
   strlcpy (args[1], file_name, PGSIZE);
-
+  char file_name_temp[1024];
+  char *file_ptr = file_name_temp;
+  strlcpy (file_ptr, file_name, strlen(file_name) + 1);
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (strtok_r(file_name, " ", &file_name), PRI_DEFAULT, start_process, &args);
+  tid = thread_create (strtok_r(file_ptr, " ", &file_ptr), PRI_DEFAULT, start_process, &args);
   sema_down (info->wait_child_exec);
   if (tid == TID_ERROR || !info->process_loaded)
     {
@@ -137,6 +139,7 @@ start_process (void *file_name_)
 
       palloc_free_page (ref);
       *(current_thread->info->process_loaded) = 1;
+      // hex_dump (*esp, *esp, (uintptr_t) PHYS_BASE - (uintptr_t) *esp, true);
     }
   sema_up (current_thread->info->wait_child_exec);
   /* If load failed, quit. */
@@ -149,7 +152,6 @@ start_process (void *file_name_)
      arguments on the stack in the form of a `struct intr_frame',
      we just point the stack pointer (%esp) to our stack frame
      and jump to it. */
-  // hex_dump (*esp, *esp, (uintptr_t) PHYS_BASE - (uintptr_t) *esp, true);
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
