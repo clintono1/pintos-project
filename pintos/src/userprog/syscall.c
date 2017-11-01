@@ -25,9 +25,9 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
   struct thread *current_thread = thread_current ();
   uint32_t* args = ((uint32_t*) f->esp);
-  uint32_t args_pd = active_pd ();
-  void *args_mapped = pagedir_get_page (args_pd, args);
-  if (!f || !args_mapped || !address_is_valid (args, sizeof (args)))
+  uint32_t pd = active_pd ();
+  void *args_mapped = pagedir_get_page (pd, args);
+  if (!f || !args_mapped || !address_is_valid (args, sizeof (args[0])))
     {
       current_thread->info->exit_code = -1;
       thread_exit ();
@@ -42,13 +42,14 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       // Check memory accesses for all below
       char *file_name = (char *) args[1];
-      uint32_t pd = active_pd ();
-      void *mapped = pagedir_get_page (pd, file_name);
-      if (!mapped || !file_name || !address_is_valid (file_name, strlen (file_name) + 1) || !strcmp (file_name, ""))
-        {
-          current_thread->info->exit_code = -1;
-          thread_exit ();
-        }
+      if (!file_name || !address_is_valid (file_name, strlen (file_name) + 1) ||
+          !pagedir_get_page (pd, args[1]) ||
+          !pagedir_get_page (pd, args[1] + strlen (file_name) + 1) ||
+          !strcmp (file_name, ""))
+          {
+            current_thread->info->exit_code = -1;
+            thread_exit ();
+          }
       lock_filesys ();
       bool created = filesys_create (file_name, args[2]); // Create new file with initial size;
       release_filesys ();
@@ -57,13 +58,14 @@ syscall_handler (struct intr_frame *f UNUSED)
   else if (args[0] == SYS_REMOVE)
     {
       char *file_name = (char *) args[1];
-      uint32_t pd = active_pd ();
-      void *mapped = pagedir_get_page (pd, file_name);
-      if (!mapped || !file_name || !address_is_valid (file_name, strlen (file_name) + 1))
-        {
-          current_thread->info->exit_code = -1;
-          thread_exit ();
-        }
+      if (!file_name || !address_is_valid (file_name, strlen (file_name) + 1) ||
+          !pagedir_get_page (pd, args[1]) ||
+          !pagedir_get_page (pd, args[1] + strlen (file_name) + 1) ||
+          !strcmp (file_name, ""))
+          {
+            current_thread->info->exit_code = -1;
+            thread_exit ();
+          }
       lock_filesys ();
       bool removed = filesys_remove (file_name); // Create new file with initial size;
       release_filesys ();
@@ -72,14 +74,14 @@ syscall_handler (struct intr_frame *f UNUSED)
   else if (args[0] == SYS_OPEN)
     {
       char *file_name = (char *) args[1];
-      uint32_t pd = active_pd ();
-      void *mapped = pagedir_get_page (pd, file_name);
-      if (!mapped || !file_name || !address_is_valid ((char *) args[1], strlen ((char *) args[1])))
-        {
-          current_thread->info->exit_code = -1;
-          thread_exit ();
-        }
-      else if (!strcmp((char *) args[1], ""))
+      if (!file_name || !address_is_valid (file_name, strlen (file_name) + 1) ||
+          !pagedir_get_page (pd, args[1]) ||
+          !pagedir_get_page (pd, args[1] + strlen (file_name) + 1))
+          {
+            current_thread->info->exit_code = -1;
+            thread_exit ();
+          }
+      else if (!strcmp (file_name, ""))
         f->eax = -1;
       else
         {
@@ -108,12 +110,12 @@ syscall_handler (struct intr_frame *f UNUSED)
   else if (args[0] == SYS_READ)
     {
       uint32_t pd = active_pd ();
-      if (!address_is_valid ((char *) args[2], args[3]) ||
-          !pagedir_get_page (pd, args[2]) || args[1] == 1)
-        {
-          current_thread->info->exit_code = -1;
-          thread_exit ();
-        }
+      if (!address_is_valid (args[2], args[3]) ||
+          !pagedir_get_page (pd, args[2] + args[3]) || args[1] == 1)
+          {
+            current_thread->info->exit_code = -1;
+            thread_exit ();
+          }
       lock_filesys ();
       if (args[1] == 0)
         {
@@ -121,7 +123,7 @@ syscall_handler (struct intr_frame *f UNUSED)
           int i = 0;
           for (i = 0; i < args[3]; i++)
             arr[i] = input_getc ();
-          memcpy(args[2], arr, args[3]);
+          memcpy (args[2], arr, args[3]);
         }
       struct file *file = get_file (args[1]);
       if (file)
@@ -131,12 +133,12 @@ syscall_handler (struct intr_frame *f UNUSED)
   else if (args[0] == SYS_WRITE)
     {
       uint32_t pd = active_pd ();
-      if (!address_is_valid ((char *) args[2], args[3]) || !pagedir_get_page (pd, args[2]) ||
-          args[1] == 0)
-        {
-          current_thread->info->exit_code = -1;
-          thread_exit ();
-        }
+      if (!address_is_valid (args[2], args[3]) ||
+          !pagedir_get_page (pd, args[2] + args[3]) || args[1] == 0)
+          {
+            current_thread->info->exit_code = -1;
+            thread_exit ();
+          }
       lock_filesys ();
       if (args[3] < 0)
           f->eax = -1;
@@ -188,7 +190,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
   else if (args[0] == SYS_PRACTICE)
     {
-      address_is_valid (args[1], sizeof(args[1]));
+      address_is_valid (args[1], sizeof (args[1]));
       f->eax = args[1] + 1;
     }
   else if (args[0] == SYS_HALT)
@@ -196,9 +198,9 @@ syscall_handler (struct intr_frame *f UNUSED)
   else if (args[0] == SYS_EXEC)
     {
       char *file_name = (char *) args[1];
-      uint32_t pd = active_pd ();
-      void *mapped = pagedir_get_page (pd, file_name);
-      if (!mapped || !file_name || !address_is_valid ((char *) args[1], strlen ((char *) args[1])))
+      if (!file_name || !address_is_valid ((char *) args[1], strlen ((char *) args[1])) ||
+          !pagedir_get_page (pd, args[1]) ||
+          !pagedir_get_page (pd, args[1] + strlen (file_name) + 1))
         {
           current_thread->info->exit_code = -1;
           thread_exit ();
@@ -206,7 +208,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = process_execute ((char *) args[1]);
     }
   else if (args[0] == SYS_WAIT)
-    f->eax = process_wait(args[1]);
+    f->eax = process_wait (args[1]);
 }
 
 /* Checks if the address is null and if the address
@@ -214,7 +216,7 @@ syscall_handler (struct intr_frame *f UNUSED)
    1 if it didnt */
 int
 address_is_valid (char *addr, int size) {
-  if (addr < 0x08048000 || !is_user_vaddr(addr + size)) {
+  if (addr + size < 0x08048000 || !is_user_vaddr (addr + size)) {
       return 0;
   } else {
     return 1;
