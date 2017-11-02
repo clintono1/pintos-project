@@ -42,7 +42,7 @@ that exit successfully will use the exit() syscall, we change the exit code
 when handling that syscall in syscall_handler.
 
 ## Part 3: File Operation Syscalls
-We changed our implmentation of the fd_table to be a member in the thread
+We changed our implementation of the fd_table to be a member in the thread
 struct, since each process can have up to 128 files open. We have dummy values
 for the first two indices to represent stdin and stdout. We also keep track
 of `latest_fd` inside the thread struct so we know where to start finding
@@ -56,7 +56,7 @@ invalid addresses being passed to it so we also have to check them before
 we execute them. All of this is checked and handled in the syscall handler.
 For **open** and **close** syscalls, we must also add or remove the file object
 to the running thread's fd_table. This can be done through the
-`insert_file_to_fd_table` and `close_file` functions that we defined in thead.c
+`insert_file_to_fd_table` and `close_file` functions that we defined in thread.c
 which automatically gets the next available fd and inserts it or removes it
 (this automatically wraps around to fd 2 if we reach 128, so we can reuse fds).
 Since we accept a string in some of the syscalls, like in exec, we also have
@@ -136,7 +136,7 @@ the tests test against.
 ## Test 1: sc-null-ptr
 
 #### Description
-This test cases tests that the system will properly deal with a NULL stack 
+This test case tests that the system will properly deal with a NULL stack 
 pointer.
 
 #### Overview
