@@ -145,7 +145,7 @@ with an exit code of -1.
 
 #### Output
 sc-null-ptr.output:
-
+```
 Copying tests/userprog/sc-null-ptr to scratch partition...
 squish-pty bochs -q
 ========================================================================
@@ -183,10 +183,10 @@ Console: 883 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off..
-
+```
 sc-null-ptr.result:
 
-PASS
+`PASS`
 
 #### Kernel Bugs
 
@@ -204,7 +204,7 @@ the file.
 
 #### Output
 test-tell.output:
-
+```
 Copying tests/filesys/base/test-tell to scratch partition...
 squish-pty bochs -q
 ========================================================================
@@ -246,21 +246,31 @@ Console: 983 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off..
-
+```
 test-tell.result:
 
-PASS
+`PASS`
 
 #### Kernel Bugs
 
 ## Experience
-Tell us about your experience writing tests for Pintos. What can be improved about the Pintos
-testing system? (There’s a lot of room for improvement.) What did you learn from writing test
-cases?
 There are a lot of test cases already implemented for Pintos, so it took us 
 some time to think of situations that have not yet been covered. In order to 
 figure out what test cases to make, we had to read through all the test cases 
 and understand exactly what was already being tested. This allowed us to have a 
 deeper understanding of how all the functions are used and what their expected 
-outputs are. The Pintos testing system is too slow and not always very informative about the results if a test fails. 
-To write our test cases, we had to learn how tests work in Pintos, so we got familiar with functions such as `check` and `fail`. These functions allow us to understand the different steps that we need to take in our tests and figure out which parts have failed if any. We also couldn't test just one function. There are so many parts to Pintos, and we had to figure out how they all relate to each other. So for the test to pass, we have to make sure each part of the pipeline is correctly working. For example, to test `tell`, we had to create and open a file before actually calling `tell`. And in order for anything to print, we also have to implement the other system calls as well. This means that we have to make sure that all these parts are working correctly just to test `tell`. 
+outputs are. The Pintos testing system is too slow and not always very 
+informative about the results if a test fails. Many of the times that we 
+encounter page faults or kernel panics, we don't know why. The failure messages 
+from the tests do not help, and we have to spend a lot of time debugging our code 
+without an idea of where it might erroring.To write our test cases, we had to 
+learn how tests work in Pintos, so we got familiar with functions such as `check` 
+and `fail`. These functions allow us to understand the different steps that we 
+need to take in our tests and figure out which parts have failed if any. We also 
+couldn't test just one function. There are so many parts to Pintos, and we had to 
+figure out how they all relate to each other. So for the test to pass, we have to 
+make sure each part of the pipeline is correctly working. For example, to test 
+`tell`, we had to create and open a file before actually calling `tell`. And in 
+order for anything to print, we also have to implement the other system calls as 
+well. This means that we have to make sure that all these parts are working 
+correctly just to test `tell`. 
