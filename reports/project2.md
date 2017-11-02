@@ -10,7 +10,8 @@ which is supposed to only be the name of the program. We also made sure to push
 the arguments onto the stack inside `process_execute` after `load` was called
 so that the stack could be set up first. Then we followed our
 design document and pushed the arguments onto the stack as was specified
-in the project specifications.
+in the project specifications. Additionally, in our design doc, we had a stack
+pointer `int **esp` in `start_process` that we changed to a `char ** esp`.
 
 ## Part 2: Process Control Syscalls
 We had to modify the child_info struct so that it looks like
@@ -68,13 +69,198 @@ When we exit a thread, we also make sure to close all of its open files.
 ## Work Distribution
 
 #### Aaron Xu
+Aaron wrote the portion of the design document for tasks 1 and 3 and
+completed the debugging questions. For the coding part, he was instrumental in
+the implementation of the code for tasks 1, 2, 3 and was the most productive in
+debugging failed test cases as well. Aaron also wrote everything in the final
+report in the section detailing the changes since the design document.
 
 #### Aidan Meredith
+Aidan helped complete the debugging questions. For the coding part, he committed
+a lot of work and effort into debugging failing test cases.
 
 #### Louise Feng
+Louise wrote the portion of the design document for task 2. She also wrote the
+responses to the additional questions. For the coding part, she helped write the
+2 additional test cases, worked a bit on implementing task 1, and helped debug
+failing test cases for each task. Louise also wrote everything in the final
+report in the project reflection section.
 
 #### Yena Kim
+Yena wrote the portion of the design document for task 2. She also wrote the
+responses for the additional questions. For the coding part, she helped write
+the 2 additional test cases and successfully debugged many failing test cases.
+Yena also wrote everything in the final report for the student testing report.
 
 ## Things That Went Well
+A major improvement for our group over project one was our understanding of
+and effort put into the design document. We wrote exhaustive documentation after
+considering everything needed to be done for each task and did our best to be
+as specific as possible. We worked together to understand possible faults in
+our design decisions and arrived at the implementation we ultimately decided on
+through precise contemplation and discussion. The design document was completed
+with everyone present so each group member was able to contribute their ideas,
+allowing for productive discussion and let us consider each task from multiple
+different perspectives to arrive at a comprehensive solution. Also, when
+everyone got together to work, we were very productive and worked well together,
+helping each other understand the code and the test cases. Everyone worked on
+every piece of code, either through writing it or debugging. Overall, the task
+that went the smoothest for us was task 1, which required the least amount of
+debugging from us after going with our initial implementation plan.
 
 ## Things That Could've Been Improved
+Time management did not go so great for us throughout this project. While we
+finished our design document in a very timely manner, the actual coding part was
+poorly planned and we weren't able to finish and pass the last few tests until
+after the deadline. For the duration of the time allotted for coding, our
+communication was a bit fractured. One of our teammates also had to be out of
+town for nearly a week and rather than allocating work for everyone to do and
+communicating throughout, we mostly waited until she came back before we started
+working together as a group and actually coded (with the exception of Aaron who
+did start working and completed a good amount of work himself). We definitely
+will better allocate our time for the next project and communicate better between
+our group to plan the timeline of what we need to get done in order to not have
+to frantically scramble to finish near the deadline. In terms of technical
+difficulties, we had a hard time passing the `multi-oom` test, `syn-write`, and
+`syn-read`. A method that may have alleviated the problems we faced that we
+didn't pay too much regard to is wholly reading and understanding each of the
+tests before starting to code. While a few of the group did look at the tests
+beforehand, we only did a cursory glance at them instead of making sure we had
+a full and comprehensive understanding of them. If we had done that we may have
+been able to originally write code that wouldn't run into the obstructions that
+the tests test against.
+
+
+# Student Testing Report
+
+## Test 1: sc-null-ptr
+
+#### Description
+This test cases tests that the system will properly deal with a NULL stack 
+pointer.
+
+#### Overview
+We set the stack pointer to a NULL pointer. The process must then be terminated 
+with an exit code of -1.
+
+#### Output
+sc-null-ptr.output:
+
+Copying tests/userprog/sc-null-ptr to scratch partition...
+squish-pty bochs -q
+========================================================================
+                       Bochs x86 Emulator 2.6.7
+              Built from SVN snapshot on November 2, 2014
+                  Compiled on Oct  1 2017 at 07:27:32
+========================================================================
+PiLo hda1
+Loading..........
+Kernel command line: -q -f extract run sc-null-ptr
+Pintos booting with 4,096 kB RAM...
+383 pages available in kernel pool.
+383 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+hda: 5,040 sectors (2 MB), model "BXHD00011", serial "Generic 1234"
+hda1: 175 sectors (87 kB), Pintos OS kernel (20)
+hda2: 4,096 sectors (2 MB), Pintos file system (21)
+hda3: 101 sectors (50 kB), Pintos scratch (22)
+filesys: using hda2
+scratch: using hda3
+Formatting file system...done.
+Boot complete.
+Extracting ustar archive from scratch device into file system...
+Putting 'sc-null-ptr' into the file system...
+Erasing ustar archive...
+Executing 'sc-null-ptr':
+(sc-null-ptr) begin
+sc-null-ptr: exit(-1)
+Execution of 'sc-null-ptr' complete.
+Timer: 255 ticks
+Thread: 46 idle ticks, 187 kernel ticks, 24 user ticks
+hda2 (filesys): 61 reads, 206 writes
+hda3 (scratch): 100 reads, 2 writes
+Console: 883 characters output
+Keyboard: 0 keys pressed
+Exception: 0 page faults
+Powering off..
+
+sc-null-ptr.result:
+
+PASS
+
+#### Kernel Bugs
+
+## Test 2: test-tell
+
+#### Description
+This test case tests that the file system call `tell` works properly.
+
+#### Overview
+We create and open a new file. Calling `tell` returns the position of the next 
+byte to be read or written. This test calls `tell` when a file is opened for 
+the first time, so the next byte to be read should be at the beginning of the 
+file. Therefore calling `tell` should return 0, which denotes the beginning of 
+the file.
+
+#### Output
+test-tell.output:
+
+Copying tests/filesys/base/test-tell to scratch partition...
+squish-pty bochs -q
+========================================================================
+                       Bochs x86 Emulator 2.6.7
+              Built from SVN snapshot on November 2, 2014
+                  Compiled on Oct  1 2017 at 07:27:32
+========================================================================
+PiLo hda1
+Loading..........
+Kernel command line: -q -f extract run test-tell
+Pintos booting with 4,096 kB RAM...
+383 pages available in kernel pool.
+383 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+hda: 5,040 sectors (2 MB), model "BXHD00011", serial "Generic 1234"
+hda1: 175 sectors (87 kB), Pintos OS kernel (20)
+hda2: 4,096 sectors (2 MB), Pintos file system (21)
+hda3: 107 sectors (53 kB), Pintos scratch (22)
+filesys: using hda2
+scratch: using hda3
+Formatting file system...done.
+Boot complete.
+Extracting ustar archive from scratch device into file system...
+Putting 'test-tell' into the file system...
+Erasing ustar archive...
+Executing 'test-tell':
+(test-tell) begin
+(test-tell) create "test_file"
+(test-tell) open "test_file"
+(test-tell) file position is correct
+(test-tell) end
+test-tell: exit(0)
+Execution of 'test-tell' complete.
+Timer: 287 ticks
+Thread: 48 idle ticks, 191 kernel ticks, 50 user ticks
+hda2 (filesys): 89 reads, 223 writes
+hda3 (scratch): 106 reads, 2 writes
+Console: 983 characters output
+Keyboard: 0 keys pressed
+Exception: 0 page faults
+Powering off..
+
+test-tell.result:
+
+PASS
+
+#### Kernel Bugs
+
+## Experience
+Tell us about your experience writing tests for Pintos. What can be improved about the Pintos
+testing system? (There’s a lot of room for improvement.) What did you learn from writing test
+cases?
+There are a lot of test cases already implemented for Pintos, so it took us 
+some time to think of situations that have not yet been covered. In order to 
+figure out what test cases to make, we had to read through all the test cases 
+and understand exactly what was already being tested. This allowed us to have a 
+deeper understanding of how all the functions are used and what their expected 
+outputs are. The Pintos testing system is too slow and not always very informative about the results if a test fails. 
+To write our test cases, we had to learn how tests work in Pintos, so we got familiar with functions such as `check` and `fail`. These functions allow us to understand the different steps that we need to take in our tests and figure out which parts have failed if any. We also couldn't test just one function. There are so many parts to Pintos, and we had to figure out how they all relate to each other. So for the test to pass, we have to make sure each part of the pipeline is correctly working. For example, to test `tell`, we had to create and open a file before actually calling `tell`. And in order for anything to print, we also have to implement the other system calls as well. This means that we have to make sure that all these parts are working correctly just to test `tell`. 
