@@ -189,6 +189,9 @@ sc-null-ptr.result:
 `PASS`
 
 #### Kernel Bugs
+Right now, the exit code is changed to -1 when the page fault occurs in the method `page_fault`. However, if the kernel changed the exit code to -1 elsewhere, the test case would output an exit code of 0 instead.
+
+If we did not print out the exit code where we did in `thread_exit`, the newly changed exit code of -1 would've been lost since the struct where we store it could've been freed.
 
 ## Test 2: test-tell
 
@@ -252,6 +255,9 @@ test-tell.result:
 `PASS`
 
 #### Kernel Bugs
+If creating a file did not work, then the test case would not have passed since there was no file to call `tell` on.
+
+If the test case did not involve calling `CHECK` on `create` and `open`, we might not have been able to create or open a file to call `tell` on, making the test case fail.
 
 ## Experience
 There are a lot of test cases already implemented for Pintos, so it took us 
