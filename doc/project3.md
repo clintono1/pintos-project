@@ -110,7 +110,7 @@ inode_resize (inode_disk *id, off_t size)
   return true;
 }
 ```
-To write past the end of a file, when we write we need to check if we're writing past the end. If we are, we call `inode resize` to resize the file to a length extending to the position we finish the write at. We do this in `inode_write_at` 
+To write past the end of a file, when we write we need to check if we're writing past the end. If we are, we call `inode_resize` to resize the file to a length extending to the position we finish the write at. We do this in `inode_write_at` 
 
 ```
 off_t
@@ -136,10 +136,11 @@ When the user writes past the end of the file, we call `inode_resize` in order t
 
 ## Synchronization
 
+When we write to a file, there is a chance that we will need to change the size of the file to make sure everything we have written to the file is within the space it extends. In this case, we shouldn't have 2 processes simultaneously trying to call `inode_resize` and possibly have the one that finishes later delete anything the first process tried to write. We therefore want to lock the Write syscall to ensure that the same file is not being accessed by more than 1 program at one time. However, we do want to allow 2 operations acting on different disk sectors, different files, and different directories to run simultaneously.
 
 ## Rationale
 
-We add a doubly-indirect block to `inode_disk` because it allows us to access 2^14 data blocks and also perfectly utilizes the thr `BLOCK_SECTOR_SIZE` long space available in the struct. In resizing the inode, we decided to keep the zeros at the end of the file explicit for ease of understanding and simpliity.
+We add a doubly-indirect block to `inode_disk` because it allows us to access 2^14 data blocks and also perfectly utilizes the the `BLOCK_SECTOR_SIZE` long space available in the struct. In resizing the inode, we decided to keep the zeros at the end of the file explicit for ease of understanding and simpliity. We also use 2 buffers - `buffer` and `buffer2` because we use a doubly-indirect block so we use each buffer for each layer.
 
 
 # Part 3: Subdirectories
@@ -185,3 +186,15 @@ We add a doubly-indirect block to `inode_disk` because it allows us to access 2^
 
 ## Rationale
 
+
+
+# Additional Question
+For this project, there are 2 optional buffer cache features that you can implement: write-behind
+and read-ahead. A buffer cache with write-behind will periodically flush dirty blocks to the filesystem
+block device, so that if a power outage occurs, the system will not lose as much data. Without
+write-behind, a write-back cache only needs to write data to disk when (1) the data is dirty and
+gets evicted from the cache, or (2) the system shuts down. A cache with read-ahead will predict
+which block the system will need next and fetch it in the background. A read-ahead cache can
+greatly improve the performance of sequential file reads and other easily-predictable file access patterns.
+Please discuss a possible implementation strategy for write-behind and a strategy for
+read-ahead.
