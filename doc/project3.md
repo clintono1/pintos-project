@@ -148,15 +148,47 @@ We add a doubly-indirect block to `inode_disk` because it allows us to access 2^
 ## Data structures and functions
 
 	Relevant Files: inode.c, thread.c, filesys.c, directory.c, syscall.c
+	
+	We will add the following syscalls:
+		chdir, mkdir, readdir, and isdir
+	adding them to the if check in syscall.c syscall_handler():
+	syscall.c
+		...
+		} else if (args[0] == SYS_CHDIR) {
+
+		} else if (args[0] == SYS_MKDIR) {
+
+		} else if (args[0] == SYS_READDIR) {
+
+		} else if (args[0] == SYS_ISDIR) {
+
+		} else if (args[0] == SYS_INUMBER) {
+
+
 
 	In directory.c dir_add(), need to resize directory....
 	-> check if e is in use
 
-	Maintain a separate current directory for each process.
-	each thread will have a field:
-		dir *cwd
-	its field will be set in process.c start_process():
-		cwd = dir_reopen(cwd_parent)
+	We will add a field cwd to each thread that will be declared in thread.c:
+
+	thread.c
+		dir *cwd;
+
+	This will be set in process.c in start_process() (or process_execute???) by calling the function dir_reopen():
+
+	process.c
+		start_process() {
+			...
+			thread->cwd = dir_reopen(current_thread->cwd);
+		}
+		
+	We will add a method dir_empty() in directory.c that checks whether the directory specified is empty.
+
+		bool dir_empty() { 
+			...
+		}
+
+	This check will be made whenever a call to dir_close() is made.
 	
 	for the syscalls that include a filename: tokenize the filename, and reduce it to its relative form (open, remove, create, exec)
 
@@ -173,7 +205,14 @@ We add a doubly-indirect block to `inode_disk` because it allows us to access 2^
 
 		dir* get_dir(int fd) // returns the the dir at location fd
 
-	check before dir_close is called, that dir is empty except for .. and ., that the dir is not root, and that no process's cwd is that dir.
+	Open syscall- need a way to determine whether a filename is a directory or a file
+
+	How will we handle relative and absolute paths?
+
+	Will a user process be allowed to delete a directory if it is the cwd of a running process?
+
+	How will your syscall handlers take a file descriptor, like 3, and locate the corresponding file or
+	directory struct?
 
 
 ## Algorithms
