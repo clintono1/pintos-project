@@ -348,44 +348,44 @@ Relevant Files: inode.c, thread.c, filesys.c, directory.c, syscall.c
 We will add the following syscalls:
 	chdir, mkdir, readdir, and isdir
 adding them to the if check in syscall.c syscall_handler():
-	```
-	syscall.c
-		...
-		} else if (args[0] == SYS_CHDIR) {
+```
+syscall.c
+	...
+	} else if (args[0] == SYS_CHDIR) {
 
-		} else if (args[0] == SYS_MKDIR) {
+	} else if (args[0] == SYS_MKDIR) {
 
-		} else if (args[0] == SYS_READDIR) {
+	} else if (args[0] == SYS_READDIR) {
 
-		} else if (args[0] == SYS_ISDIR) {
+	} else if (args[0] == SYS_ISDIR) {
 
-		} else if (args[0] == SYS_INUMBER) {
-	```
-
-
+	} else if (args[0] == SYS_INUMBER) {
+```
 
 We will modify `dir_add()` in directory.c in order to resize a directory once it has reached its capacity. (How are we going to 		resize?)
 
 We will add a field `cwd` to each thread that will be declared in thread.c:
-	```
-	thread.c
-		dir *cwd;
-	```
+```
+thread.c
+	dir *cwd;
+```
+
 which will be set in process.c in `start_process()` (or `process_execute`???) by calling the function `dir_reopen()`:
-	```
-	process.c
-		start_process() {
-			...
-			thread->cwd = dir_reopen(current_thread->cwd);
-		}
-	```
+```
+process.c
+	start_process() {
+		...
+		thread->cwd = dir_reopen(current_thread->cwd);
+	}
+```
 
 We will add a method `dir_empty()` in directory.c that checks whether the directory specified is empty.
-	```
-	bool dir_empty() {
-		...
-	}
-	```
+```
+bool dir_empty() {
+	...
+}
+```
+	
 This check will be made whenever a call to dir_close() is made.
 
 for the syscalls that include a filename: tokenize the filename, and reduce it to its relative form (`open()`, `remove()`, `create()`, `exec()`)
@@ -393,18 +393,22 @@ for the syscalls that include a filename: tokenize the filename, and reduce it t
 for the case in which ../ or ./ are provided, look at the cwd of the currently running process....
 
 in filesys.c, modify the function `filesys_open()` to open the directory of the currently running process.....
-	```
-	dir *dir = dir_open(current_inode) //how do we access cur_inode
-	```
+```
+dir *dir = dir_open(current_inode) //how do we access cur_inode
+```
 
 modify thread.c to add directories to fd table (maybe inodes instead of file * or dir *)
 	```
 	insert_dir_to_fd_table(dir *dir) // returns the fd of the dir
 	```
+
 add function:
 	```
 	dir* get_dir(int fd) // returns the the dir at location fd
 	```
+	
+In order to deal with relative file paths, we will split the filename passed into _ using the method get_next_part() provided in the spec.
+
 Open syscall- need a way to determine whether a filename is a directory or a file
 
 How will we handle relative and absolute paths?
@@ -437,3 +441,8 @@ which block the system will need next and fetch it in the background. A read-ahe
 greatly improve the performance of sequential file reads and other easily-predictable file access patterns.
 Please discuss a possible implementation strategy for write-behind and a strategy for
 read-ahead.
+
+To implement a write-behind cache, we first need to mark data that has been modified. When we first load or modify existing data in the cache, we mark it with a dirty bit. This denotes that the data is new and should be written to disk at the next opportunity. To offload the contents of the cache at regular intervals, we invoke system interrupts. During the interrupt, we move blocks that are marked with a dirty bit to disk.
+
+In order to implement a read-ahead cache, we would have a heap that stores filenames and the amount of times they have been accessed from disk. When we aren't currently loading from memory, we grab the block that corresponds to the most frequently accessed filename, and load it into main memory.
+
