@@ -585,16 +585,7 @@ get access to all of its blocks through its doubly indirect pointer.
 
 
 # Additional Question
-For this project, there are 2 optional buffer cache features that you can implement: write-behind
-and read-ahead. A buffer cache with write-behind will periodically flush dirty blocks to the filesystem
-block device, so that if a power outage occurs, the system will not lose as much data. Without
-write-behind, a write-back cache only needs to write data to disk when (1) the data is dirty and
-gets evicted from the cache, or (2) the system shuts down. A cache with read-ahead will predict
-which block the system will need next and fetch it in the background. A read-ahead cache can
-greatly improve the performance of sequential file reads and other easily-predictable file access patterns.
-Please discuss a possible implementation strategy for write-behind and a strategy for
-read-ahead.
+## Write-Behind and Read-Ahead Cache
 
 To implement a write-behind cache, we first need to mark data that has been modified. When we first load or modify existing data in the cache, we mark it with a dirty bit. This denotes that the data is new and should be written to disk at the next opportunity. To offload the contents of the cache at regular intervals, we invoke system interrupts. During the interrupt, we move blocks that are marked with a dirty bit to disk.
-
-In order to implement a read-ahead cache, we would have a heap that stores filenames and the amount of times they have been accessed from disk. When we aren't currently loading from memory, we grab the block that corresponds to the most frequently accessed filename, and load it into main memory.
+In order to implement a read-ahead cache, we would have a heap that stores filenames and the number of times they have been accessed from disk. When we aren't currently loading from memory, we grab the block that corresponds to the most frequently accessed filename, and load it into main memory.
