@@ -42,7 +42,7 @@ entry if it isn't, and then copies the block's data into the passed in buffer.
 If the sector is not in the cache, it will need to call `block_read` and put that in
 the new cache entry.
 
-To write to a sector, we will define a funciton `cache_write_block` which takes
+To write to a sector, we will define a function `cache_write_block` which takes
 in a sector number and a buffer containing 512 bytes of data to write to. If
 the sector is not in the cache, we load it into the cache. Then we copy the data
 over into the cache entry's data block. Since this takes in a buffer that contains
@@ -139,6 +139,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   return bytes_written;
 }
 ```
+we will use the clock algorithm for our cache replacement policy.
 
 ## Synchronization
 For synchronization, we want to make it so that when two processes check if
@@ -204,7 +205,7 @@ inode_add_block (inode_disk *id, off_t size)
   return indirect_block[sector_ind];
 }
 ```
-To write past the end of a file, when we write we need to check if we're writing past the end. If we are, we call `inode_resize` to resize the file to a length extending to the position we finish the write at. We do this in `inode_write_at` 
+To write past the end of a file, when we write we need to check if we're writing past the end. If we are, we call `inode_resize` to resize the file to a length extending to the position we finish the write at. We do this in `inode_write_at`
 
 ```
 off_t
@@ -214,7 +215,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   ...
 
   off_t bytes_written = 0;
-  
+
   ...
 
   off_t length = inode_length (inode);
@@ -263,7 +264,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
               bytes_written += size;
             }
         }
-      else  //if we start at a block later than the block of the EOF 
+      else  //if we start at a block later than the block of the EOF
         {
           offset -= 512 - (length % 512);
           while (offset > 512)                  //find the block
@@ -385,7 +386,7 @@ bool dir_empty() {
 	...
 }
 ```
-	
+
 This check will be made whenever a call to dir_close() is made.
 
 for the syscalls that include a filename: tokenize the filename, and reduce it to its relative form (`open()`, `remove()`, `create()`, `exec()`)
@@ -406,7 +407,7 @@ add function:
 	```
 	dir* get_dir(int fd) // returns the the dir at location fd
 	```
-	
+
 In order to deal with relative file paths, we will split the filename passed into _ using the method get_next_part() provided in the spec.
 
 Open syscall- need a way to determine whether a filename is a directory or a file
@@ -447,4 +448,3 @@ read-ahead.
 To implement a write-behind cache, we first need to mark data that has been modified. When we first load or modify existing data in the cache, we mark it with a dirty bit. This denotes that the data is new and should be written to disk at the next opportunity. To offload the contents of the cache at regular intervals, we invoke system interrupts. During the interrupt, we move blocks that are marked with a dirty bit to disk.
 
 In order to implement a read-ahead cache, we would have a heap that stores filenames and the amount of times they have been accessed from disk. When we aren't currently loading from memory, we grab the block that corresponds to the most frequently accessed filename, and load it into main memory.
-
