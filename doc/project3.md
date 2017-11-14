@@ -422,9 +422,11 @@ directory struct?
 ## Algorithms
 
 
-
+Because we handled inode expansion in part 2, this should also apply to directory expansion because all their data is stored in their respective inodes. When we add to a directory by calling `dir_add`, we are able to expand the directory because this function calls `inode_write_at`, where we implemented inode expansion. 
 
 ## Synchronization
+
+Our implementation of directory deletion allows directories to be deleted even if it is open by a process or is the current working directory of some process. Due to this, we need to ensure that when we delete a direcoty, we should no longer be able to open files or create new files in the deleted directory. In this case we always convert the path to an absolute path and start at the root and follow the path until the correct directory is found and then delete it so that that directory is no longer ever accessible. We will call `dir_remove` which will delete the inode associated with the directory. Therefore when another process tries to access the directory, it will see that the inode does not exist and will not be able to open it. This way we can prevent a process from trying to open or do anything to a directory that is deleted.
 
 
 ## Rationale
