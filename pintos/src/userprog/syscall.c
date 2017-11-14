@@ -184,7 +184,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       lock_filesys ();
       struct file *file = get_file (args[1]);
-      if (file && !file->deny_write)
+      if (file)
         close_file (args[1]);
       release_filesys ();
     }
@@ -216,7 +216,7 @@ syscall_handler (struct intr_frame *f UNUSED)
    1 if it didnt */
 int
 address_is_valid (char *addr, int size) {
-  if (addr + size < 0x08048000 || !is_user_vaddr (addr + size)) {
+  if (!is_user_vaddr (addr + size)) {
       return 0;
   } else {
     return 1;

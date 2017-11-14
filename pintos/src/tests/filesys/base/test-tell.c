@@ -10,8 +10,8 @@ tell returns the correct position */
 void
 test_main (void)
 {
-	char *file_name = "test_file";
-	int fd;
+  char *file_name = "test_file";
+  int fd;
   CHECK (create (file_name, 1), "create \"%s\"", file_name);
   CHECK ((fd = open (file_name)) > 1, "open \"%s\"", file_name);
   long pos = tell (fd);

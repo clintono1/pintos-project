@@ -288,84 +288,242 @@ We add a doubly-indirect block to `inode_disk` because it allows us to access 2^
 
 ## Data structures and functions
 
-	Relevant Files: inode.c, thread.c, filesys.c, directory.c, syscall.c
+We will add the following syscalls: chdir, mkdir, readdir, and isdir
+adding them to the if check in syscall.c syscall_handler():
+syscall.c
+```
+	...
+	} else if (args[0] == SYS_CHDIR) {
 
-	We will add the following syscalls:
-		chdir, mkdir, readdir, and isdir
-	adding them to the if check in syscall.c syscall_handler():
-	syscall.c
-		...
-		} else if (args[0] == SYS_CHDIR) {
+	} else if (args[0] == SYS_MKDIR) {
 
-		} else if (args[0] == SYS_MKDIR) {
+	} else if (args[0] == SYS_READDIR) {
 
-		} else if (args[0] == SYS_READDIR) {
+	} else if (args[0] == SYS_ISDIR) {
 
-		} else if (args[0] == SYS_ISDIR) {
-
-		} else if (args[0] == SYS_INUMBER) {
-
+	} else if (args[0] == SYS_INUMBER) {
+```
 
 
-	In directory.c dir_add(), need to resize directory....
-	-> check if e is in use
+In directory.c dir_add(), need to resize directory...
 
-	We will add a field cwd to each thread that will be declared in thread.c:
+We will add a cwd field to the thread struct.
 
-	thread.c
-		dir *cwd;
+```
+struct thread {
+	...
+	char cwd[14]; // Current working directory of the thread.
+}
+```
 
-	This will be set in process.c in start_process() (or process_execute???) by calling the function dir_reopen():
+This will be passed down from the parent in `process_execute` into the `*aux`
+parameter in `thread_create`. If there is no parent (ie. the first process), the
+directory will be set to '/' to represent the root directory. We currently pass
+in an array into the `*aux` parameter, so we can add a new element which contains
+the parent's cwd. We must make sure that we create a copy of this string so that
+if this is modified, we do not modify the parent's current working directory.
 
-	process.c
-		start_process() {
-			...
-			thread->cwd = dir_reopen(current_thread->cwd);
-		}
+In order to tell whether an inode is for a file or a directory, we will
+add a boolean to the inode_disk struct.
 
-	We will add a method dir_empty() in directory.c that checks whether the directory specified is empty.
+```
+struct inode_disk {
+	...
+	bool is_dir;
+	...
+}
+```
 
-		bool dir_empty() {
-			...
-		}
+We have to change the fd table to support opening directories as well. We would
+originally change the fd array that we use from a `struct file*` array to a
+`struct file_or_dir *` array where this new struct is defined as:
+```
+struct file_or_dir {
+	struct file* file;
+	struct dir* dir;
+}
+```
 
-	This check will be made whenever a call to dir_close() is made.
+Thus, we could simply check whichever is not null and that would be the type
+of object that is stored in the fd table. However, since we are using staff
+solutions, we think that in the `file_descriptor` struct, we would simply need
+to add a `struct dir*` element and that would accomplish that same thing.
 
-	for the syscalls that include a filename: tokenize the filename, and reduce it to its relative form (open, remove, create, exec)
-
-	for the case in which ../ or ./ are provided, look at the cwd of the currently running process....
-
-	in filesys.c, modify the function filesys_open to open the directory of the currently running process.....
-
-		dir *dir = dir_open(current_inode) //how do we access cur_inode
-
-	modify thread.c to add directories to fd table (maybe inodes instead of file * or dir *)
-
-		insert_dir_to_fd_table(dir *dir) // returns the fd of the dir
-	add function:
-
-		dir* get_dir(int fd) // returns the the dir at location fd
-
-	Open syscall- need a way to determine whether a filename is a directory or a file
-
-	How will we handle relative and absolute paths?
-
-	Will a user process be allowed to delete a directory if it is the cwd of a running process?
-
-	How will your syscall handlers take a file descriptor, like 3, and locate the corresponding file or
-	directory struct?
-
+```
+struct file_descriptor
+  {
+    struct list_elem elem;      /* List element. */
+    struct file *file;          /* File. */
+    struct dir *dir;			/* Directory */
+    int handle;                 /* File handle. */
+  };
+```
 
 ## Algorithms
 
+For the syscalls that take in a file name, (open, remove, create, exec, chdir,
+mkdir), we define a new function that will turn the given path and return the
+absolute path. We will use the returned path instead of whatever path was given,
+so that we only need to deal with absolute paths in the rest of the code.
 
+```
+char *
+path_to_absolute(const char *path)
+{
+	/* Returns a string that represents the absolute path of the given path.
+	   String must be freed after use. */
+	if (*path == '/') {
+		// Path is already absolute
+		char *absolute = malloc(strlen(path) + 1);
+		strcpy(absolute, path);
+		return absolute;
+	}
+	char *cpy_path;
+	strcpy(cpy_path, path)
+	int absolute_length = strlen(path) + strlen(thread_current()->cwd);
+	char *absolute = malloc(absolute_length + 1);
+
+	char *part;
+	int next_path = get_next_part(part, &cpy_path);
+	char *iter = absolute;
+	memcpy(iter, thread_current()->cwd, strlen(thread_current()->cwd));
+	iter += strlen(thread_current()->cwd);
+	while (next_path) {
+		if (next_path == -1) {
+			printf("File name was too long");
+			return NULL;
+		} else {
+			if (strcmp(path, "..") == 0) {
+				// Remove last part of current path.
+				// If no last part (ie. we are at root, do nothing).
+			} else if (strcmp(path, ".") == 0) {
+				// Do nothing
+			} else {
+				memcpy(iter, path, strlen(path));
+				iter += strlen(path);
+				*iter = '/'
+				iter++;
+			}
+		}
+		next_path = get_next_part(part, &cpy_path);
+	}
+	*--iter = '\0' // Null terminate path and remove trailing slash.
+	return absolute;
+}
+
+```
+
+We also define a function to get the last directory object of a absolute path.
+
+```
+struct dir *
+get_last_directory(const char *path) {
+	char *part;
+	char *absolute = path;
+	strcpy(absolute, path);
+	struct dir *dir = dir_open_root();
+	struct dir *prev = dir;
+	int next_part = get_next_part(part, &absolute);
+	struct inode *inode;
+	while (next_part) {
+		if (next_part == -1) {
+			printf("File name too long");
+			return NULL;
+		} else {
+			if (dir_lookup(dir, part, &inode)) {
+				next_part = get_next_part(part, &absolute);
+				dir_close(prev);
+				prev = dir;
+				dir = dir_open(inode);
+			} else {
+				return NULL;
+			}
+		}
+	}
+	dir_close(dir);
+	return prev;
+}
+
+```
+
+
+We must also change how the open syscall is handled in the syscall handler.
+We can do this by getting the absolute path of the requested file, getting the
+last directory, and then calling dir_lookup on the actual file's name. If there are
+any failures in looking up the part, then we can return -1. Otherwise, we will
+check if the final inode returned is a directory or a file by checking its
+inode_disk's `is_dir` element. After, we can add this to the fd table and return
+the corresponding fd to the user program.
+
+In order to remove a directory, we will define a function `dir_is_empty`
+
+```
+bool
+dir_is_empty (struct dir *dir)
+{
+	char tmp[15];
+	counter = 0;
+	struct dir *directory = dir_reopen(dir);
+	while(dir_readdir(directory, tmp)) {
+		counter++;
+	}
+	return counter == 2; // Directory only has . and ..
+}
+
+```
+
+To actually remove a directory, we will search for the specified file by using
+converting the given path to absolute path. Then, we remove it as if it is a file.
+We can use `get_last_directory` and checking if the file exists and then remove it
+by calling `dir_remove` with this directory.
+If the file is a directory, we make sure that it is first empty through the
+`dir_is_empty` function and if it returns true, then we remove it with
+`dir_remove`. This should update the remove syscall so that it supports directories.
+
+For the chdir syscall, we can get the absolute path by using the `path_to_absolute`
+function we defined and setting the thread's cwd value to this new absolute path.
+Then we have to make sure that this is a valid by appending some dummy file name
+to the end of the path and calling `get_last_directory` on that. For example,
+if switch to directory "/foo/bar", we would pass "/foo/bar/fakeName" and check that
+`get_last_directory` does not return NULL (and we must close the returned directory
+object). If this is true, then we can change the thread's cwd value to this new
+path. Return 1 if successful to the user program, else 0.
+
+For the mkdir syscall, we can do the same thing as the chdir syscall. However,
+instead of closing the returned directory object immediately, we try to call
+`dir_add` with an unallocated free block.
+
+For the readdir syscall, we can extract the directory object from the `file_descriptor`
+struct in the fd table. Then, we can call dir_readdir with the passed in buffer.
+However, we must have a check so that "." and ".." are not returned.
+
+For the isdir syscall, we can check the `file_descriptor` struct corresponding
+to the passed in file descriptor. If the file struct is not NULL, then we know
+that that descriptor corresponds to a file. Otherwise, it is a directory.
+
+For the inumber syscall, we can extract either the file or directory struct from
+the file descriptor. From there, we can grab the inode in that struct and call
+`inode_get_inumber` to return the corresponding inumber.
 
 
 ## Synchronization
 
 
-## Rationale
 
+## Rationale
+We handle relative paths by always converting to an absolute path. By storing
+the current working directory in the thread's struct, we can concatenate the
+current working directory with the relative path. If we encounter a "..", then
+we update the absolute path by removing the last part of our current path. The
+user process will be allowed to delete a directory if it is the current
+working directory of a runningprocess because we only store that as a string
+in the thread struct. Since our implementation makes us concatenate strings,
+get the absolute path, and then find the file starting from root, we should run
+into no issues with deleting the directory. Finally, given a file descriptor,
+we can find the corresponding file struct or directory struct by accessing
+the `file_descriptor` struct which will either contain a valid `struct file` or
+`struct dir` pointer. From there, we can get the corresponding inode and then
+get access to all of its blocks through its doubly indirect pointer.
 
 
 # Additional Question

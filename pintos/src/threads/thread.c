@@ -391,8 +391,10 @@ thread_exit (void)
       free (current_thread->info->wait_semaphore);
       free (current_thread->info);
     }
+  lock_filesys ();
   file_close (current_thread->executable);
   free_thread_files ();
+  release_filesys ();
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
