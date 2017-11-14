@@ -351,6 +351,7 @@ add function:
 	```
 	dir* get_dir(int fd) // returns the the dir at location fd
 	```
+In order to deal with relative file paths, we will split the filename passed into _ using the method get_next_part() provided in the spec.
 
 Open syscall- need a way to determine whether a filename is a directory or a file
 
