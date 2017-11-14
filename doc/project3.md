@@ -360,9 +360,6 @@ syscall.c
 	} else if (args[0] == SYS_INUMBER) {
 ```
 
-
-In directory.c dir_add(), need to resize directory...
-
 We will add a cwd field to the thread struct.
 
 ```
@@ -557,7 +554,9 @@ For the isdir syscall, we can check the `file_descriptor` struct corresponding
 to the passed in file descriptor. If the file struct is not NULL, then we know
 that that descriptor corresponds to a file. Otherwise, it is a directory.
 
-For the inumber syscall, we can extract either the file or directory struct from
+For the inumber syscall, as shown above, we would use the same scheme as discussed
+in part 2. However, since we are using the staff solution which implements a
+`file_descriptor` struct, we can extract either the file or directory struct from
 the file descriptor. From there, we can grab the inode in that struct and call
 `inode_get_inumber` to return the corresponding inumber.
 
