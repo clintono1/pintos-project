@@ -18,7 +18,6 @@ struct cache_entry {
 	bool dirty; // Used for write-back
 	bool valid // Check if this entry is valid
 	int reference; // Used for clock algorithm
-	struct lock block_lock; // Lock this sector
 	block_sector_t sector; // Sector number of the block below.
 	void *block; // Should be malloc'd to be 512 bytes
 }
@@ -49,11 +48,97 @@ the sector is not in the cache, we load it into the cache. Then we copy the data
 over into the cache entry's data block. Since this takes in a buffer that contains
 all data that will be written to the block, we will need to do what is done
 in the skeleton code through the bounce buffer. Since we need to read the cache
-before we write to it, we must lock the cache entry before we read it. Then,
-after we finish writing, we can release the lock. We do not need to lock the
-sector in `cache_get_block` or `inode_read_at`, only in `inode_write_at`,
-since reading does not actually modify the cache entry data and the function is atomic.
+before we write to it and prevent other processes from accessing the same
+socket, we decided to disable interrupts once we determine what sector number
+we need to access. We will reenable interrupts once we reach the end
+of the while loop, specifically after we finish all the reading and writing
+for that sector. We do this in both `inode_write_at` and `inode_read_at`.
+```
+off_t
+inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
+{
+  uint8_t *buffer = buffer_;
+  off_t bytes_read = 0;
+  uint8_t *bounce = NULL;
 
+  while (size > 0)
+    {
+      /* Disk sector to read, starting byte offset within sector. */
+      block_sector_t sector_idx = byte_to_sector (inode, offset);
+      int sector_ofs = offset % BLOCK_SECTOR_SIZE;
+
+      /* Bytes left in inode, bytes left in sector, lesser of the two. */
+      off_t inode_left = inode_length (inode) - offset;
+      int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
+      int min_left = inode_left < sector_left ? inode_left : sector_left;
+
+      /* Number of bytes to actually copy out of this sector. */
+      int chunk_size = size < min_left ? size : min_left;
+      if (chunk_size <= 0)
+        break;
+
+      old_level = intr_disable ();
+      ...
+      ... // Do read/writes to cache
+
+  	  intr_set_level (old_level);
+
+      /* Advance. */
+      size -= chunk_size;
+      offset += chunk_size;
+      bytes_read += chunk_size;
+    }
+  free (bounce);
+
+  return bytes_read;
+}
+```
+
+```
+off_t
+inode_write_at (struct inode *inode, const void *buffer_, off_t size,
+                off_t offset)
+{
+  const uint8_t *buffer = buffer_;
+  off_t bytes_written = 0;
+  uint8_t *bounce = NULL;
+
+  if (inode->deny_write_cnt)
+    return 0;
+
+  while (size > 0)
+    {
+      /* Sector to write, starting byte offset within sector. */
+      block_sector_t sector_idx = byte_to_sector (inode, offset);
+      int sector_ofs = offset % BLOCK_SECTOR_SIZE;
+
+      /* Bytes left in inode, bytes left in sector, lesser of the two. */
+      off_t inode_left = inode_length (inode) - offset;
+      int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
+      int min_left = inode_left < sector_left ? inode_left : sector_left;
+
+
+      /* Number of bytes to actually write into this sector. */
+      int chunk_size = size < min_left ? size : min_left;
+      if (chunk_size <= 0)
+        break;
+
+      old_level = intr_disable ();
+      ...
+      ... // Do read/writes to cache
+
+  	  intr_set_level (old_level);
+
+      /* Advance. */
+      size -= chunk_size;
+      offset += chunk_size;
+      bytes_written += chunk_size;
+    }
+  free (bounce);
+
+  return bytes_written;
+}
+```
 
 ## Synchronization
 For synchronization, we want to make it so that when two processes check if
@@ -73,10 +158,13 @@ this function call.
 ## Rationale
 We considered using multiple levels of locks to lock the cache to allow concurrent writes to different
 sectors, but we found that it wasn't feasible. We had to make operations on any
-one cache entry because if not, the cache entry could be evicted before we
+one cache entry atomic because if not, the cache entry could be evicted before we
 read/write but after we check that the entry is in the cache. Thus, we found that
 we always need to check if a sector is in the cache and then read or write from
-it atomically.
+it atomically. By disabling interrupts once we determine what sector we want,
+this prevents any other processes from accessing the cache before the current operation
+finishes. This ensures that it will read the right data and that an entry
+will never be evicted while a process is actively using it.
 
 # Part 2: Extensible Files
 
@@ -163,7 +251,7 @@ inode_resize (inode_disk *id, off_t size)
   return true;
 }
 ```
-To write past the end of a file, when we write we need to check if we're writing past the end. If we are, we call `inode_resize` to resize the file to a length extending to the position we finish the write at. We do this in `inode_write_at` 
+To write past the end of a file, when we write we need to check if we're writing past the end. If we are, we call `inode_resize` to resize the file to a length extending to the position we finish the write at. We do this in `inode_write_at`
 
 ```
 off_t
@@ -201,7 +289,7 @@ We add a doubly-indirect block to `inode_disk` because it allows us to access 2^
 ## Data structures and functions
 
 	Relevant Files: inode.c, thread.c, filesys.c, directory.c, syscall.c
-	
+
 	We will add the following syscalls:
 		chdir, mkdir, readdir, and isdir
 	adding them to the if check in syscall.c syscall_handler():
@@ -234,15 +322,15 @@ We add a doubly-indirect block to `inode_disk` because it allows us to access 2^
 			...
 			thread->cwd = dir_reopen(current_thread->cwd);
 		}
-		
+
 	We will add a method dir_empty() in directory.c that checks whether the directory specified is empty.
 
-		bool dir_empty() { 
+		bool dir_empty() {
 			...
 		}
 
 	This check will be made whenever a call to dir_close() is made.
-	
+
 	for the syscalls that include a filename: tokenize the filename, and reduce it to its relative form (open, remove, create, exec)
 
 	for the case in which ../ or ./ are provided, look at the cwd of the currently running process....
