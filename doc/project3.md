@@ -184,105 +184,160 @@ When a write is made off the end of the file, the following function is called t
 
 ...
 
-bool
-inode_resize (inode_disk *id, off_t size)
+block_sector_t
+inode_add_block (inode_disk *id, off_t size)
 {
-  block_sector_t sector;
-  block_sector_t buffer[128];
-  if (id->start == 0)
-  	{
-  	  memset (buffer, 0, 512);
-  	  if (!free_map_allocate (1, sector))
-  	  	{
-  	  	  inode_resize (id, id->length);
-  	  	  return false;
-  	  	}
-  	  id->start = sector;
-  	}
-  else
-  	{
-  	  block_read (fs_device, sector, buffer);
-  	}
-  for (int i = 0; i < 128; i++)
-  	{
-  	  block_sector_t buffer2[128];
-  	  if (id->start[i] == 0)
-  	    {
-  	      memset (buffer2, 0, 512);
-  	      if (!free_map_allocate (1, sector))
-  	      	{
-  	      	  inode_resize (id, id->length);
-  	      	  return false;
-  	      	}
-  	      id->start[i] = sector;
-  	    }
-  	  else
-  	  	{
-  	  	  block_read (fs_device, id->start[i], buffer2);
-  	  	}
-  	  for (int j = 0; j < 128; j++)
-  	  	{
-  	  	  if (size <= (i * powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] != 0)
-  	  	  	{
-  	  	  	  free_map_release (buffer2[j], 1);
-  	  	  	  buffer2[j] = 0;
-  	  	  	}
-  	  	  if (size > (i * powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] == 0)
-  	  	  	{
-  	  	  	  if (!free_map_allocate (1, sector))
-  	  	  	  	{
-  	  	  	  	  inode_resize (id, id->length);
-  	  	  	  	  return false;
-  	  	  	  	}
-  	  	  	  buffer2[j] = sector;
-  	  	  	}
-  	  	}
-  	  if (size <= i * powf (2, 16))
-  	  	{
-  	  	  free_map_release (id->start[i], 1);
-  	  	  id->start[i] = 0;
-  	  	}
-  	  else
-  	  	{
-  	  	  block_write (fs_device, id->start[i], buffer2);
-  	  	}
-  	}
-  id->length = size;
-  return true;
+  uint32_t indirect_pointer_ind = (uint32_t) (size / powf (2, 16)); // index of the indirect pointer in the doubly indirect block
+  uint32_t sector_ind = (uint32_t) (size - indirect_pointer_ind * powf (2, 16) / BLOCK_SECTOR_SIZE); // index of the sector in the indirect block, should not yet be allocated
+
+  void *doubly_indirect_block = cache_get_block (id->start);
+  block_sector_t indirect_block_sector = doubly_indirect_block[indirect_pointer_ind];
+  void *indirect_block = cache_get_block (indirect_block_sector);
+
+  block_sector_t *buffer[128];
+  memset (buffer, 0, 512);
+  cache_write_block (buffer, indirect_block[sector_ind]);
+
+  if (!free_map_allocate (1, &indirect_block[sector_ind]))
+    return 0;
+
+  return indirect_block[sector_ind];
 }
 ```
-To write past the end of a file, when we write we need to check if we're writing past the end. If we are, we call `inode_resize` to resize the file to a length extending to the position we finish the write at. We do this in `inode_write_at`
+To write past the end of a file, when we write we need to check if we're writing past the end. If we are, we call `inode_resize` to resize the file to a length extending to the position we finish the write at. We do this in `inode_write_at` 
 
 ```
 off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset)
 {
-   ...
-   off_t inode_left = inode_length (inode) - offset;
+  ...
 
-   if (inode_left < size)
-   	 {
-   	 	inode_resize(inode->data, size);
-   	 }
+  off_t bytes_written = 0;
+  
+  ...
 
-   ...
+  off_t length = inode_length (inode);
+  off_t inode_left = length - offset;
+
+  if (inode_left < 0) // past end of file
+    {
+      offset -= length;
+      if (offset < 512 - (length % 512)) //still within the same block
+        {
+          uint32_t indirect_pointer_ind = (uint32_t) (length + offset / powf (2, 16)); // index of the indirect pointer in the doubly indirect block
+          uint32_t sector_ind = (uint32_t) (length + offset - indirect_pointer_ind * powf (2, 16) / BLOCK_SECTOR_SIZE); // index of the sector in the indirect block
+
+          void *doubly_indirect_block = cache_get_block (inode->start);
+          block_sector_t indirect_block_sector = doubly_indirect_block[indirect_pointer_ind];
+          void *indirect_block = cache_get_block (indirect_block_sector);
+          void *block = cache_get_block (indirect_block[sector_ind]);
+          if (size < 512 - offset + (length % 512))                    //if we only need to write to the one block
+            memcpy (block[offset + (length % 512)], buffer, size);
+            cache_write_block (block, block_num);
+            return size;
+          else            //if we need more than the current block
+            {
+              memcpy (block + offset + (length % 512), buffer, 512 - offset + (length % 512));
+              size -= 512 - offset + (length % 512);
+              bytes_written += 512 - offset + (length % 512);
+              int buffer_offset = 512 - offset + (length % 512);
+              while (size > 512)                      // keep grabbing ech new block we'll need
+                {
+                  block_sector_t block_num = inode_add_block (inode->data);
+                  if (block_sector_t == 0)           //if we run out of space
+                    return bytes_written;
+                  void *block = cache_get_block (block_num);
+                  memcpy (block, buffer + buffer_offset, 512);
+                  cache_write_block (block, block_num);
+                  size -= 512;
+                  bytes_written += 512;
+                  buffer_offset += 512;
+                }
+              block_sector_t block_num = inode_add_block (inode->data);
+              if (block_sector_t == 0)
+                return bytes_written;
+              void *block = cache_get_block (block_num);
+              memcpy (block, buffer + buffer_offset, size);
+              cache_write_block (block, block_num);
+              bytes_written += size;
+            }
+        }
+      else  //if we start at a block later than the block of the EOF 
+        {
+          offset -= 512 - (length % 512);
+          while (offset > 512)                  //find the block
+            {
+              block_sector_t block_num = inode_add_block (inode->data);
+              if (block_sector_t == 0)
+                return bytes_written;
+              offset -= 512;
+            }
+          int buffer_offset = 0;
+          block_sector_t block_num = inode_add_block (inode->data);
+          if (block_sector_t == 0)
+            return bytes_written;
+          void *block = cache_get_block (block_num);
+          memcpy (block + offset, buffer + buffer_offset, size);
+          cache_write_block (block, block_num);
+          bytes_written += size;
+          while (size > 512) //if we need to keep writing into other blocks
+            {
+              block_sector_t block_num = inode_add_block (inode->data);
+              if (block_sector_t == 0)
+                return bytes_written;
+              void *block = cache_get_block (block_num);
+              memcpy (block, buffer + buffer_offset, 512);
+              cache_write_block (block, block_num);
+              size -= 512;
+              bytes_written += 512;
+              buffer_offset += 512;
+            }
+          block_sector_t block_num = inode_add_block (inode->data);
+          if (block_sector_t == 0)
+            return bytes_written;
+          void *block = cache_get_block (block_num);
+          memcpy (block, buffer + buffer_offset, size);
+          cache_write_block (block, block_num);
+          bytes_written += size;
+        }
+    }
+
+  ...
+
+  return bytes_written;
+}
+```
+
+To implement the syscall `inumber` we add the following `else if` case to `syscall_handler`.
+```
+static void
+syscall_handler (struct intr_frame *f UNUSED)
+{
+  ...
+  else if (args[0] == SYS_INUMBER)
+    {
+      int fd = args[1];
+      struct file *file = get_file (fd);
+      f->eax = file->inode->sector;
+    }
+  ...
 }
 ```
 
 ## Algorithms
 
-When the user writes past the end of the file, we call `inode_resize` in order to extend the file. We do this by extending the data that the `inode_disk` struct can access by changing one of its attributes to be a doubly-indirect pointer. This allows the inode to have 2^23 bytes of data (1 doubly-indirect pointer * 2^7 indirect pointers * 2^7 direct pointers * 2^9 BLOCK_SECTOR_SIZE). `inode_resize` goes through all the pointers accessible by the `start` doubly-indirect pointer. It checks that each indirect pointer is allocated or not. If it is, it is stored in a buffer, otherwise it is set to 0. Then, it iterates through all the direct pointers from that indirect pointer and frees those data blocks if it doesn't fit within the new size. Otherwise, it allocates a new block and puts it into another buffer. After iterating through all the direct pointers of an indirect pointer, it checks to see if the new size includes that indirect pointer. If it does, it will write the buffer into the indirect pointer block. Otherwise, we set the indirect pointer to 0, indicating that it is unallocated. Finally, we set the new size to be the length of the inode.
+When the user writes past the end of the file, we call `inode_add_block` in order to extend the file. We do this by extending the data that the `inode_disk` struct can access by changing one of its attributes to be a doubly-indirect pointer. This allows the inode to have 2^23 bytes of data (1 doubly-indirect pointer * 2^7 indirect pointers * 2^7 direct pointers * 2^9 `BLOCK_SECTOR_SIZE`). `inode_add_block` figures out where the last block of allocated data is and allocates a new block after it. We will continuously allocate blocks in `inode_write_at` until we have reached the size we require. If we have run out of free blocks and `free_map_allocate` returns `false`, then we just stop trying to allocate blocks and return the number of bytes we have managed to write to data so far. We read and write to the blocks by using the cache functions `cache_get_block` and `cache_write_block`, which check to see if the desired block is in the cache. If it isn't it'll add it to the cache. These functions are more thoroughly explained in part 1. The cases we account for are the case where we still only need to write to the same block as the last block, when we need to write to the last block as well as allocating more blocks, and when we start writing past the current block and need to allocate more blocks to get to where we start writing. Once we have the block we want to be in, we `memcpy` from the buffer and write to the cache.
 
+For the syscall `inumber`, we get the file associated with the given file descriptor using the current thread's `fd_table` and the method `get_file`. The returned `struct file` then has an inode that contains the unique sector it occupies, which is its inode number.
 
 ## Synchronization
 
-When we write to a file, there is a chance that we will need to change the size of the file to make sure everything we have written to the file is within the space it extends. In this case, we shouldn't have 2 processes simultaneously trying to call `inode_resize` and possibly have the one that finishes later delete anything the first process tried to write. We therefore want to lock the Write syscall to ensure that the same file is not being accessed by more than 1 program at one time. However, we do want to allow 2 operations acting on different disk sectors, different files, and different directories to run simultaneously.
+When we write to a file, there is a chance that we will need to change the size of the file to make sure everything we have written to the file is within the space it extends. In this case, we shouldn't have 2 processes simultaneously trying to call `inode_add_block` and possibly have the one that finishes later delete anything the first process tried to write. This is being dealt with by the cache in part 1.
 
 ## Rationale
 
-We add a doubly-indirect block to `inode_disk` because it allows us to access 2^14 data blocks and also perfectly utilizes the the `BLOCK_SECTOR_SIZE` long space available in the struct. In resizing the inode, we decided to keep the zeros at the end of the file explicit for ease of understanding and simpliity. We also use 2 buffers - `buffer` and `buffer2` because we use a doubly-indirect block so we use each buffer for each layer.
-
+We add a doubly-indirect block to `inode_disk` because it allows us to access 2^14 data blocks and also perfectly utilizes the the `BLOCK_SECTOR_SIZE` long space available in the struct. In resizing the inode, we decided to keep the zeros at the end of the file between the EOF and the offset passed in `inode_write_at` explicit for ease of understanding and simplicity
 
 # Part 3: Subdirectories
 
