@@ -148,7 +148,7 @@ end of the function. Then, we also want to make it so that no two sectors
 can be modified at the same time. We can do this by disabling interrupts
 for the `cache_get_block` and `cache_write_block` functions, and since they modify one
 sector at a time, this will make modifying a sector atomic and thus no race
-conditions will occur. Since cache entires are only evicted during these two
+conditions will occur. Since cache entries are only evicted during these two
 function calls and they have interrupts disabled, an entry cannot be
 evicted while another file is actively reading or writing to it. Similarly,
 no other processes can also access the block as we are evicting a block and
@@ -288,11 +288,12 @@ We add a doubly-indirect block to `inode_disk` because it allows us to access 2^
 
 ## Data structures and functions
 
-	Relevant Files: inode.c, thread.c, filesys.c, directory.c, syscall.c
+Relevant Files: inode.c, thread.c, filesys.c, directory.c, syscall.c
 
-	We will add the following syscalls:
-		chdir, mkdir, readdir, and isdir
-	adding them to the if check in syscall.c syscall_handler():
+We will add the following syscalls:
+	chdir, mkdir, readdir, and isdir
+adding them to the if check in syscall.c syscall_handler():
+	```
 	syscall.c
 		...
 		} else if (args[0] == SYS_CHDIR) {
@@ -304,56 +305,59 @@ We add a doubly-indirect block to `inode_disk` because it allows us to access 2^
 		} else if (args[0] == SYS_ISDIR) {
 
 		} else if (args[0] == SYS_INUMBER) {
+	```
 
 
 
-	In directory.c dir_add(), need to resize directory....
-	-> check if e is in use
+We will modify `dir_add()` in directory.c in order to resize a directory once it has reached its capacity. (How are we going to 		resize?)
 
-	We will add a field cwd to each thread that will be declared in thread.c:
-
+We will add a field `cwd` to each thread that will be declared in thread.c:
+	```
 	thread.c
 		dir *cwd;
-
-	This will be set in process.c in start_process() (or process_execute???) by calling the function dir_reopen():
-
+	```
+which will be set in process.c in `start_process()` (or `process_execute`???) by calling the function `dir_reopen()`:
+	```
 	process.c
 		start_process() {
 			...
 			thread->cwd = dir_reopen(current_thread->cwd);
 		}
+	```
 
-	We will add a method dir_empty() in directory.c that checks whether the directory specified is empty.
+We will add a method `dir_empty()` in directory.c that checks whether the directory specified is empty.
+	```
+	bool dir_empty() {
+		...
+	}
+	```
+This check will be made whenever a call to dir_close() is made.
 
-		bool dir_empty() {
-			...
-		}
+for the syscalls that include a filename: tokenize the filename, and reduce it to its relative form (`open()`, `remove()`, `create()`, `exec()`)
 
-	This check will be made whenever a call to dir_close() is made.
+for the case in which ../ or ./ are provided, look at the cwd of the currently running process....
 
-	for the syscalls that include a filename: tokenize the filename, and reduce it to its relative form (open, remove, create, exec)
+in filesys.c, modify the function `filesys_open()` to open the directory of the currently running process.....
+	```
+	dir *dir = dir_open(current_inode) //how do we access cur_inode
+	```
 
-	for the case in which ../ or ./ are provided, look at the cwd of the currently running process....
+modify thread.c to add directories to fd table (maybe inodes instead of file * or dir *)
+	```
+	insert_dir_to_fd_table(dir *dir) // returns the fd of the dir
+	```
+add function:
+	```
+	dir* get_dir(int fd) // returns the the dir at location fd
+	```
+Open syscall- need a way to determine whether a filename is a directory or a file
 
-	in filesys.c, modify the function filesys_open to open the directory of the currently running process.....
+How will we handle relative and absolute paths?
 
-		dir *dir = dir_open(current_inode) //how do we access cur_inode
+Will a user process be allowed to delete a directory if it is the cwd of a running process?
 
-	modify thread.c to add directories to fd table (maybe inodes instead of file * or dir *)
-
-		insert_dir_to_fd_table(dir *dir) // returns the fd of the dir
-	add function:
-
-		dir* get_dir(int fd) // returns the the dir at location fd
-
-	Open syscall- need a way to determine whether a filename is a directory or a file
-
-	How will we handle relative and absolute paths?
-
-	Will a user process be allowed to delete a directory if it is the cwd of a running process?
-
-	How will your syscall handlers take a file descriptor, like 3, and locate the corresponding file or
-	directory struct?
+How will your syscall handlers take a file descriptor, like 3, and locate the corresponding file or
+directory struct?
 
 
 ## Algorithms
