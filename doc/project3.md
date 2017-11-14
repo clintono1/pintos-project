@@ -386,3 +386,8 @@ which block the system will need next and fetch it in the background. A read-ahe
 greatly improve the performance of sequential file reads and other easily-predictable file access patterns.
 Please discuss a possible implementation strategy for write-behind and a strategy for
 read-ahead.
+
+To implement a write-behind cache, we would periodically invoke a system interrupt. During this interrupt, we would move blocks that have been modified in the cache onto disk.
+
+In order to implement a read-ahead cache, we would have a heap that stores filenames and the amount of times they have been accessed from disk. When we aren't currently loading from memory, we grab the block that corresponds to the most frequently accessed filename, and load it into main memory.
+
