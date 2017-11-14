@@ -82,22 +82,190 @@ it atomically.
 
 ## Data structures and functions
 
+To allow for extending files, we keep the `inode_disk` struct as is, but we change `start` to be a doubly indirect block pointer to allow for more data to be stored per file.
+```
+struct inode_disk
+  {
+  	block_sector_t start;				/* Doubly indirect pointer. */
+  }
+```
 
+When a write is made off the end of the file, the following function is called to resize the file.
+```
+#include <math.h>
+
+...
+
+bool
+inode_resize (inode_disk *id, off_t size)
+{
+  block_sector_t sector;
+  block_sector_t buffer[128];
+  if (id->start == 0)
+  	{
+  	  memset (buffer, 0, 512);
+  	  if (!free_map_allocate (1, sector))
+  	  	{
+  	  	  inode_resize (id, id->length);
+  	  	  return false;
+  	  	}
+  	  id->start = sector;
+  	}
+  else
+  	{
+  	  block_read (fs_device, sector, buffer);
+  	}
+  for (int i = 0; i < 128; i++)
+  	{
+  	  block_sector_t buffer2[128];
+  	  if (id->start[i] == 0)
+  	    {
+  	      memset (buffer2, 0, 512);
+  	      if (!free_map_allocate (1, sector))
+  	      	{
+  	      	  inode_resize (id, id->length);
+  	      	  return false;
+  	      	}
+  	      id->start[i] = sector;
+  	    }
+  	  else
+  	  	{
+  	  	  block_read (fs_device, id->start[i], buffer2);
+  	  	}
+  	  for (int j = 0; j < 128; j++)
+  	  	{
+  	  	  if (size <= (i * powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] != 0)
+  	  	  	{
+  	  	  	  free_map_release (buffer2[j], 1);
+  	  	  	  buffer2[j] = 0;
+  	  	  	}
+  	  	  if (size > (i * powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] == 0)
+  	  	  	{
+  	  	  	  if (!free_map_allocate (1, sector))
+  	  	  	  	{
+  	  	  	  	  inode_resize (id, id->length);
+  	  	  	  	  return false;
+  	  	  	  	}
+  	  	  	  buffer2[j] = sector;
+  	  	  	}
+  	  	}
+  	  if (size <= i * powf (2, 16))
+  	  	{
+  	  	  free_map_release (id->start[i], 1);
+  	  	  id->start[i] = 0;
+  	  	}
+  	  else
+  	  	{
+  	  	  block_write (fs_device, id->start[i], buffer2);
+  	  	}
+  	}
+  id->length = size;
+  return true;
+}
+```
+To write past the end of a file, when we write we need to check if we're writing past the end. If we are, we call `inode_resize` to resize the file to a length extending to the position we finish the write at. We do this in `inode_write_at` 
+
+```
+off_t
+inode_write_at (struct inode *inode, const void *buffer_, off_t size,
+                off_t offset)
+{
+   ...
+   off_t inode_left = inode_length (inode) - offset;
+
+   if (inode_left < size)
+   	 {
+   	 	inode_resize(inode->data, size);
+   	 }
+
+   ...
+}
+```
 
 ## Algorithms
 
-
+When the user writes past the end of the file, we call `inode_resize` in order to extend the file. We do this by extending the data that the `inode_disk` struct can access by changing one of its attributes to be a doubly-indirect pointer. This allows the inode to have 2^23 bytes of data (1 doubly-indirect pointer * 2^7 indirect pointers * 2^7 direct pointers * 2^9 BLOCK_SECTOR_SIZE). `inode_resize` goes through all the pointers accessible by the `start` doubly-indirect pointer. It checks that each indirect pointer is allocated or not. If it is, it is stored in a buffer, otherwise it is set to 0. Then, it iterates through all the direct pointers from that indirect pointer and frees those data blocks if it doesn't fit within the new size. Otherwise, it allocates a new block and puts it into another buffer. After iterating through all the direct pointers of an indirect pointer, it checks to see if the new size includes that indirect pointer. If it does, it will write the buffer into the indirect pointer block. Otherwise, we set the indirect pointer to 0, indicating that it is unallocated. Finally, we set the new size to be the length of the inode.
 
 
 ## Synchronization
 
+When we write to a file, there is a chance that we will need to change the size of the file to make sure everything we have written to the file is within the space it extends. In this case, we shouldn't have 2 processes simultaneously trying to call `inode_resize` and possibly have the one that finishes later delete anything the first process tried to write. We therefore want to lock the Write syscall to ensure that the same file is not being accessed by more than 1 program at one time. However, we do want to allow 2 operations acting on different disk sectors, different files, and different directories to run simultaneously.
 
 ## Rationale
+
+We add a doubly-indirect block to `inode_disk` because it allows us to access 2^14 data blocks and also perfectly utilizes the the `BLOCK_SECTOR_SIZE` long space available in the struct. In resizing the inode, we decided to keep the zeros at the end of the file explicit for ease of understanding and simpliity. We also use 2 buffers - `buffer` and `buffer2` because we use a doubly-indirect block so we use each buffer for each layer.
+
 
 # Part 3: Subdirectories
 
 ## Data structures and functions
 
+	Relevant Files: inode.c, thread.c, filesys.c, directory.c, syscall.c
+	
+	We will add the following syscalls:
+		chdir, mkdir, readdir, and isdir
+	adding them to the if check in syscall.c syscall_handler():
+	syscall.c
+		...
+		} else if (args[0] == SYS_CHDIR) {
+
+		} else if (args[0] == SYS_MKDIR) {
+
+		} else if (args[0] == SYS_READDIR) {
+
+		} else if (args[0] == SYS_ISDIR) {
+
+		} else if (args[0] == SYS_INUMBER) {
+
+
+
+	In directory.c dir_add(), need to resize directory....
+	-> check if e is in use
+
+	We will add a field cwd to each thread that will be declared in thread.c:
+
+	thread.c
+		dir *cwd;
+
+	This will be set in process.c in start_process() (or process_execute???) by calling the function dir_reopen():
+
+	process.c
+		start_process() {
+			...
+			thread->cwd = dir_reopen(current_thread->cwd);
+		}
+		
+	We will add a method dir_empty() in directory.c that checks whether the directory specified is empty.
+
+		bool dir_empty() { 
+			...
+		}
+
+	This check will be made whenever a call to dir_close() is made.
+	
+	for the syscalls that include a filename: tokenize the filename, and reduce it to its relative form (open, remove, create, exec)
+
+	for the case in which ../ or ./ are provided, look at the cwd of the currently running process....
+
+	in filesys.c, modify the function filesys_open to open the directory of the currently running process.....
+
+		dir *dir = dir_open(current_inode) //how do we access cur_inode
+
+	modify thread.c to add directories to fd table (maybe inodes instead of file * or dir *)
+
+		insert_dir_to_fd_table(dir *dir) // returns the fd of the dir
+	add function:
+
+		dir* get_dir(int fd) // returns the the dir at location fd
+
+	Open syscall- need a way to determine whether a filename is a directory or a file
+
+	How will we handle relative and absolute paths?
+
+	Will a user process be allowed to delete a directory if it is the cwd of a running process?
+
+	How will your syscall handlers take a file descriptor, like 3, and locate the corresponding file or
+	directory struct?
 
 
 ## Algorithms
@@ -110,3 +278,15 @@ it atomically.
 
 ## Rationale
 
+
+
+# Additional Question
+For this project, there are 2 optional buffer cache features that you can implement: write-behind
+and read-ahead. A buffer cache with write-behind will periodically flush dirty blocks to the filesystem
+block device, so that if a power outage occurs, the system will not lose as much data. Without
+write-behind, a write-back cache only needs to write data to disk when (1) the data is dirty and
+gets evicted from the cache, or (2) the system shuts down. A cache with read-ahead will predict
+which block the system will need next and fetch it in the background. A read-ahead cache can
+greatly improve the performance of sequential file reads and other easily-predictable file access patterns.
+Please discuss a possible implementation strategy for write-behind and a strategy for
+read-ahead.
