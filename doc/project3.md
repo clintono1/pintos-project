@@ -589,4 +589,4 @@ get access to all of its blocks through its doubly indirect pointer.
 ## Write-Behind and Read-Ahead Cache
 
 To implement a write-behind cache, we first need to mark data that has been modified. When we first load or modify existing data in the cache, we mark it with a dirty bit. This denotes that the data is new and should be written to disk at the next opportunity. To offload the contents of the cache at regular intervals, we invoke system interrupts. During the interrupt, we move blocks that are marked with a dirty bit to disk.
-In order to implement a read-ahead cache, we would have a heap that stores filenames and the amount of times they have been accessed from disk. When we aren't currently loading from memory, we grab the block that corresponds to the most frequently accessed filename, and load it into main memory.
+In order to implement a read-ahead cache, we would have a heap that stores filenames and the number of times they have been accessed from disk. When we aren't currently loading from memory, we grab the block that corresponds to the most frequently accessed filename, and load it into main memory.
