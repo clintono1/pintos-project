@@ -6,10 +6,14 @@
 #include "filesys/filesys.h"
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
+int get_next_cache_block_to_evict (void);
+void cache_write_block (block_sector_t sector, void *buffer);
+void cache_get_block (block_sector_t sector, void *buffer);
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
@@ -19,6 +23,139 @@ struct inode_disk
     unsigned magic;                     /* Magic number. */
     uint32_t unused[125];               /* Not used. */
   };
+
+struct cache_entry
+  {
+    bool dirty; // Used for write-back
+    bool valid; // Check if this entry is valid
+    int reference; // Used for clock algorithm
+    block_sector_t sector; // Sector number of the block below.
+    struct semaphore sector_lock; // Lock the sector to prevent concurrent read/writes.
+    void *block; // Should be malloc'd to be BLOCK_SECTOR_SIZE bytes
+  };
+
+int clock_hand; // Default initialized to 0. Used for the clock algorithm.
+struct cache_entry *cache[64]; // Cache sector blocks.
+struct lock cache_lock; // Lock actions that check the cache.
+
+/* Uses the clock algorithm and returns the index of the cache block that
+   should be evicted. This function is NOT thread-safe. You must acquire
+   the cache_lock before calling this. */
+int
+get_next_cache_block_to_evict (void)
+{
+  // Might need to account for the case where all blocks are locked
+  // Currently skips over blocks that are locked. Uses the clock algorithm.
+  clock_hand++;
+  while (1)
+    {
+      if (clock_hand == 64)
+        clock_hand = 0;
+      if (!cache[clock_hand])
+        return clock_hand;
+      if (cache[clock_hand]->reference && cache[clock_hand]->sector_lock.value)
+        cache[clock_hand]->reference = 0;
+      else
+        return clock_hand;
+      clock_hand++;
+    }
+}
+
+void
+cache_get_block (block_sector_t sector, void *buffer)
+{
+  int i;
+  lock_acquire (&cache_lock);
+  // Check if sector is already in the cache and return if it is.
+  for (i = 0; i < 64; i++)
+    {
+      if (cache[i] && cache[i]->sector == sector)
+        {
+          sema_down (&cache[i]->sector_lock);
+          cache[i]->reference = 1;
+          lock_release (&cache_lock);
+          memcpy (buffer, cache[i]->block, BLOCK_SECTOR_SIZE);
+          sema_up (&cache[i]->sector_lock);
+          return;
+        }
+    }
+  int index = get_next_cache_block_to_evict ();
+  void *block;
+  struct cache_entry *entry;
+  if (cache[index])
+    {
+      sema_down (&cache[index]->sector_lock);
+      if (cache[index]->dirty)
+        block_write (fs_device, cache[index]->sector, cache[index]->block);
+      entry = cache[index];
+      block = cache[index]->block;
+    }
+  else
+    {
+      entry = malloc(sizeof(struct cache_entry));
+      block = malloc(BLOCK_SECTOR_SIZE);
+      sema_init (&entry->sector_lock, 0);
+      cache[index] = entry;
+      entry->block = block;
+    }
+  entry->dirty = 0;
+  entry->valid = 1;
+  entry->reference = 1;
+  entry->sector = sector;
+  lock_release (&cache_lock);
+  block_read (fs_device, sector, block);
+  sema_up (&entry->sector_lock);
+  memcpy(buffer, block, BLOCK_SECTOR_SIZE);
+}
+
+void
+cache_write_block (block_sector_t sector, void *buffer)
+{
+  int i;
+  lock_acquire (&cache_lock);
+  // Check if sector is already in the cache and return if it is.
+  for (i = 0; i < 64; i++)
+    {
+      if (cache[i] && cache[i]->sector == sector)
+        {
+          sema_down (&cache[i]->sector_lock);
+          cache[i]->reference = 1;
+          lock_release (&cache_lock);
+          memcpy (cache[i]->block, buffer, BLOCK_SECTOR_SIZE);
+          cache[i]->dirty = 1;
+          sema_up (&cache[i]->sector_lock);
+          return;
+        }
+    }
+  int index = get_next_cache_block_to_evict ();
+  void *block;
+  struct cache_entry *entry;
+  if (cache[index])
+    {
+      sema_down (&cache[index]->sector_lock);
+      if (cache[index]->dirty)
+        block_write (fs_device, cache[index]->sector, cache[index]->block);
+      entry = cache[index];
+      block = cache[index]->block;
+    }
+  else
+    {
+      entry = malloc(sizeof(struct cache_entry));
+      block = malloc(BLOCK_SECTOR_SIZE);
+      sema_init (&entry->sector_lock, 0);
+      cache[index] = entry;
+      entry->block = block;
+    }
+  entry->dirty = 1;
+  entry->valid = 1;
+  entry->reference = 1;
+  entry->sector = sector;
+  lock_release (&cache_lock);
+  block_read (fs_device, sector, block);
+  memcpy(block, buffer, BLOCK_SECTOR_SIZE);
+  sema_up (&entry->sector_lock);
+}
+
 
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
@@ -62,6 +199,8 @@ void
 inode_init (void)
 {
   list_init (&open_inodes);
+  lock_init (&cache_lock);
+  clock_hand = -1;
 }
 
 /* Initializes an inode with LENGTH bytes of data and
@@ -223,7 +362,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
           /* Read full sector directly into caller's buffer. */
-          block_read (fs_device, sector_idx, buffer + bytes_read);
+          cache_get_block (sector_idx, (void *) (buffer + bytes_read));
         }
       else
         {
@@ -235,7 +374,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
               if (bounce == NULL)
                 break;
             }
-          block_read (fs_device, sector_idx, bounce);
+          cache_get_block (sector_idx, (void *) bounce);
           memcpy (buffer + bytes_read, bounce + sector_ofs, chunk_size);
         }
 
@@ -284,7 +423,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
           /* Write full sector directly to disk. */
-          block_write (fs_device, sector_idx, buffer + bytes_written);
+          cache_write_block (sector_idx, (void *) (buffer + bytes_written));
         }
       else
         {
@@ -300,11 +439,11 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
              we're writing, then we need to read in the sector
              first.  Otherwise we start with a sector of all zeros. */
           if (sector_ofs > 0 || chunk_size < sector_left)
-            block_read (fs_device, sector_idx, bounce);
+            cache_get_block (sector_idx, (void *) bounce);
           else
             memset (bounce, 0, BLOCK_SECTOR_SIZE);
           memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
-          block_write (fs_device, sector_idx, bounce);
+          cache_write_block (sector_idx, (void *) bounce);
         }
 
       /* Advance. */
