@@ -6,14 +6,15 @@
 #include "userprog/pagedir.h"
 #include "devices/input.h"
 #include "devices/shutdown.h"
+#include "filesys/directory.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "filesys/inode.h"
 #include "threads/interrupt.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "filesys/directory.h"
 
 static int sys_halt (void);
 static int sys_exit (int status);
@@ -509,7 +510,27 @@ sys_isdir (int fd)
 static bool
 sys_inumber (int fd)
 {
+  struct thread *cur = thread_current ();
+  struct list_elem *e, *next;
+  struct inode *inode;
 
+  for (e = list_begin (&cur->fds); e != list_end (&cur->fds); e = next)
+    {
+      struct file_descriptor *fd;
+      fd = list_entry (e, struct file_descriptor, elem);
+      if (fd->handle == fd)
+        {
+          struct inode *inode;
+          if (fd->file)
+            inode = fd->file->inode;
+          else
+            inode = fd->dir->inode;
+          return inode_get_inumber (inode);
+        }
+
+      next = list_next (e);
+    }
+  return -1;
 }
 
 /* Extracts a file name part from *SRCP into PART, and updates *SRCP so that the
