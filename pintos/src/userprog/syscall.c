@@ -13,7 +13,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-
+#include "filesys/directory.h"
 
 static int sys_halt (void);
 static int sys_exit (int status);
@@ -28,23 +28,23 @@ static int sys_write (int handle, void *usrc_, unsigned size);
 static int sys_seek (int handle, unsigned position);
 static int sys_tell (int handle);
 static int sys_close (int handle);
+static int sys_practice (int num);
 static bool sys_chdir (const char *dir);
 static bool sys_mkdir (const char *dir);
 static bool sys_readdir (int fd, char *name);
 static bool sys_isdir (int fd);
 static bool sys_inumber (int fd);
+static int get_next_part (char part[NAME_MAX + 1], const char **srcp);
 
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t);
 
 /* Serializes file system operations. */
-static struct lock fs_lock;
 
 void
 syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  lock_init (&fs_lock);
 }
 
 /* System call handler. */
@@ -76,8 +76,9 @@ syscall_handler (struct intr_frame *f)
       {2, (syscall_function *) sys_seek},
       {1, (syscall_function *) sys_tell},
       {1, (syscall_function *) sys_close},
-      {0, (syscall_function *) sys_mmap}, // Not implemented.
-      {0, (syscall_function *) sys_munmap}, // Not implemented.
+      {1, (syscall_function *) sys_practice},
+      {0, (syscall_function *) NULL}, // sys_mmap - Not implemented.
+      {0, (syscall_function *) NULL}, // sys_munmap - Not implemented.
       {1, (syscall_function *) sys_chdir},
       {1, (syscall_function *) sys_mkdir},
       {2, (syscall_function *) sys_readdir},
@@ -205,9 +206,7 @@ sys_exec (const char *ufile)
   tid_t tid;
   char *kfile = copy_in_string (ufile);
 
-  lock_acquire (&fs_lock);
   tid = process_execute (kfile);
-  lock_release (&fs_lock);
 
   palloc_free_page (kfile);
 
@@ -228,9 +227,7 @@ sys_create (const char *ufile, unsigned initial_size)
   char *kfile = copy_in_string (ufile);
   bool ok;
 
-  lock_acquire (&fs_lock);
   ok = filesys_create (kfile, initial_size);
-  lock_release (&fs_lock);
 
   palloc_free_page (kfile);
 
@@ -244,9 +241,7 @@ sys_remove (const char *ufile)
   char *kfile = copy_in_string (ufile);
   bool ok;
 
-  lock_acquire (&fs_lock);
   ok = filesys_remove (kfile);
-  lock_release (&fs_lock);
 
   palloc_free_page (kfile);
 
@@ -258,6 +253,7 @@ struct file_descriptor
   {
     struct list_elem elem;      /* List element. */
     struct file *file;          /* File. */
+    struct dir *dir;            /* Directory. */
     int handle;                 /* File handle. */
   };
 
@@ -272,7 +268,6 @@ sys_open (const char *ufile)
   fd = malloc (sizeof *fd);
   if (fd != NULL)
     {
-      lock_acquire (&fs_lock);
       fd->file = filesys_open (kfile);
       if (fd->file != NULL)
         {
@@ -282,7 +277,6 @@ sys_open (const char *ufile)
         }
       else
         free (fd);
-      lock_release (&fs_lock);
     }
 
   palloc_free_page (kfile);
@@ -317,9 +311,7 @@ sys_filesize (int handle)
   struct file_descriptor *fd = lookup_fd (handle);
   int size;
 
-  lock_acquire (&fs_lock);
   size = file_length (fd->file);
-  lock_release (&fs_lock);
 
   return size;
 }
@@ -343,7 +335,6 @@ sys_read (int handle, void *udst_, unsigned size)
 
   /* Handle all other reads. */
   fd = lookup_fd (handle);
-  lock_acquire (&fs_lock);
   while (size > 0)
     {
       /* How much to read into this page? */
@@ -354,7 +345,6 @@ sys_read (int handle, void *udst_, unsigned size)
       /* Check that touching this page is okay. */
       if (!verify_user (udst))
         {
-          lock_release (&fs_lock);
           thread_exit ();
         }
 
@@ -376,7 +366,6 @@ sys_read (int handle, void *udst_, unsigned size)
       udst += retval;
       size -= retval;
     }
-  lock_release (&fs_lock);
 
   return bytes_read;
 }
@@ -393,7 +382,6 @@ sys_write (int handle, void *usrc_, unsigned size)
   if (handle != STDOUT_FILENO)
     fd = lookup_fd (handle);
 
-  lock_acquire (&fs_lock);
   while (size > 0)
     {
       /* How much bytes to write to this page? */
@@ -404,7 +392,6 @@ sys_write (int handle, void *usrc_, unsigned size)
       /* Check that we can touch this user page. */
       if (!verify_user (usrc))
         {
-          lock_release (&fs_lock);
           thread_exit ();
         }
 
@@ -432,7 +419,6 @@ sys_write (int handle, void *usrc_, unsigned size)
       usrc += retval;
       size -= retval;
     }
-  lock_release (&fs_lock);
 
   return bytes_written;
 }
@@ -443,10 +429,8 @@ sys_seek (int handle, unsigned position)
 {
   struct file_descriptor *fd = lookup_fd (handle);
 
-  lock_acquire (&fs_lock);
   if ((off_t) position >= 0)
     file_seek (fd->file, position);
-  lock_release (&fs_lock);
 
   return 0;
 }
@@ -458,9 +442,7 @@ sys_tell (int handle)
   struct file_descriptor *fd = lookup_fd (handle);
   unsigned position;
 
-  lock_acquire (&fs_lock);
   position = file_tell (fd->file);
-  lock_release (&fs_lock);
 
   return position;
 }
@@ -470,12 +452,17 @@ static int
 sys_close (int handle)
 {
   struct file_descriptor *fd = lookup_fd (handle);
-  lock_acquire (&fs_lock);
   file_close (fd->file);
-  lock_release (&fs_lock);
   list_remove (&fd->elem);
   free (fd);
   return 0;
+}
+
+/* Practice system call */
+static int
+sys_practice (int num)
+{
+  return num + 1;
 }
 
 /* Change directory system call */
@@ -485,32 +472,70 @@ sys_chdir (const char *dir)
 
 }
 
-/* Change directory system call */
+/* Make directory system call */
 static bool
 sys_mkdir (const char *dir)
 {
 
 }
 
-/* Change directory system call */
+/* Read directory system call */
 static bool
 sys_readdir (int fd, char *name)
 {
 
 }
 
-/* Change directory system call */
+/* Isdir directory system call */
 static bool
 sys_isdir (int fd)
 {
+  struct thread *cur = thread_current ();
+  struct list_elem *e, *next;
 
+  for (e = list_begin (&cur->fds); e != list_end (&cur->fds); e = next)
+    {
+      struct file_descriptor *fd;
+      fd = list_entry (e, struct file_descriptor, elem);
+      if (fd->handle == fd)
+          if (fd->dir)
+            return true;
+      next = list_next (e);
+    }
+  return false;
 }
 
-/* Change directory system call */
+/* Inumber directory system call */
 static bool
 sys_inumber (int fd)
 {
 
+}
+
+/* Extracts a file name part from *SRCP into PART, and updates *SRCP so that the
+next call will return the next file name part. Returns 1 if successful, 0 at
+end of string, -1 for a too-long file name part. */
+static int
+get_next_part (char part[NAME_MAX + 1], const char **srcp) {
+  const char *src = *srcp;
+  char *dst = part;
+  /* Skip leading slashes. If it's all slashes, we're done. */
+  while (*src == '/')
+    src++;
+  if (*src == '\0')
+    return 0;
+  /* Copy up to NAME_MAX character from SRC to DST. Add null terminator. */
+  while (*src != '/' && *src != '\0') {
+    if (dst < part + NAME_MAX)
+      *dst++ = *src;
+    else
+      return -1;
+    src++;
+  }
+  *dst = '\0';
+  /* Advance source pointer. */
+  *srcp = src;
+  return 1;
 }
 
 /* On thread exit, close all open files. */
@@ -525,9 +550,7 @@ syscall_exit (void)
       struct file_descriptor *fd;
       fd = list_entry (e, struct file_descriptor, elem);
       next = list_next (e);
-      lock_acquire (&fs_lock);
       file_close (fd->file);
-      lock_release (&fs_lock);
       free (fd);
     }
 }
