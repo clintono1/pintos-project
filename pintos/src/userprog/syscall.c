@@ -28,6 +28,11 @@ static int sys_write (int handle, void *usrc_, unsigned size);
 static int sys_seek (int handle, unsigned position);
 static int sys_tell (int handle);
 static int sys_close (int handle);
+static bool sys_chdir (const char *dir);
+static bool sys_mkdir (const char *dir);
+static bool sys_readdir (int fd, char *name);
+static bool sys_isdir (int fd);
+static bool sys_inumber (int fd);
 
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t);
@@ -71,6 +76,13 @@ syscall_handler (struct intr_frame *f)
       {2, (syscall_function *) sys_seek},
       {1, (syscall_function *) sys_tell},
       {1, (syscall_function *) sys_close},
+      {0, (syscall_function *) sys_mmap}, // Not implemented.
+      {0, (syscall_function *) sys_munmap}, // Not implemented.
+      {1, (syscall_function *) sys_chdir},
+      {1, (syscall_function *) sys_mkdir},
+      {2, (syscall_function *) sys_readdir},
+      {1, (syscall_function *) sys_isdir},
+      {1, (syscall_function *) sys_inumber},
     };
 
   const struct syscall *sc;
@@ -464,6 +476,41 @@ sys_close (int handle)
   list_remove (&fd->elem);
   free (fd);
   return 0;
+}
+
+/* Change directory system call */
+static bool
+sys_chdir (const char *dir)
+{
+
+}
+
+/* Change directory system call */
+static bool
+sys_mkdir (const char *dir)
+{
+
+}
+
+/* Change directory system call */
+static bool
+sys_readdir (int fd, char *name)
+{
+
+}
+
+/* Change directory system call */
+static bool
+sys_isdir (int fd)
+{
+
+}
+
+/* Change directory system call */
+static bool
+sys_inumber (int fd)
+{
+
 }
 
 /* On thread exit, close all open files. */
