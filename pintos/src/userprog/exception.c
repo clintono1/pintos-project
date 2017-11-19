@@ -88,7 +88,6 @@ kill (struct intr_frame *f)
          expected.  Kill the user process.  */
       printf ("%s: dying due to interrupt %#04x (%s).\n",
               thread_name (), f->vec_no, intr_name (f->vec_no));
-      thread_current()->info->exit_code = -1;
       intr_dump_frame (f);
       thread_exit ();
 
@@ -149,10 +148,22 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+  /* Handle bad dereferences from system call implementations. */
+  if (!user)
+    {
+      f->eip = (void (*) (void)) f->eax;
+      f->eax = 0;
+      return;
+    }
+
   /* To implement virtual memory, delete the rest of the function
-     body, and replace itp with code that brings in the page to
+     body, and replace it with code that brings in the page to
      which fault_addr refers. */
-  thread_current()->info->exit_code = -1;
-  thread_exit ();
+  printf ("Page fault at %p: %s error %s page in %s context.\n",
+          fault_addr,
+          not_present ? "not present" : "rights violation",
+          write ? "writing" : "reading",
+          user ? "user" : "kernel");
+  kill (f);
 }
 

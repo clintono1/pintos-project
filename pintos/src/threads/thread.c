@@ -7,13 +7,13 @@
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
-#include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -37,8 +37,6 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
-
-struct lock filesys_lock;
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame
@@ -71,12 +69,8 @@ static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
-void free_thread_files (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-
-int find_first_unused_fd (void);
-int get_next_fd (void);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -99,79 +93,12 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
-  lock_init (&filesys_lock);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-}
-
-void
-lock_filesys (void)
-{
-  lock_acquire (&filesys_lock);
-}
-
-void
-release_filesys (void)
-{
-  lock_release (&filesys_lock);
-}
-
-/* Insert file object into the specified position. Returns the fd (index) */
-int
-insert_file_to_fd_table (struct file *file)
-{
-  int index = get_next_fd ();
-  struct thread *current_thread = thread_current();
-  current_thread->fd_table[index] = file;
-  return index;
-}
-
-struct file *
-get_file (int fd)
-{
-  if (fd >= 2 && fd < 128)
-    return thread_current()->fd_table[fd];
-  return NULL;
-}
-
-/* Removes the file object from the processe's fd table */
-void
-close_file (int fd)
-{
-  struct thread *current_thread = thread_current();
-  if (current_thread->fd_table[fd])
-      file_close (current_thread->fd_table[fd]);
-  current_thread->fd_table[fd] = NULL;
-}
-
-/* Returns the next unused fd. */
-int
-get_next_fd (void)
-{
-  struct thread *current_thread = thread_current();
-  current_thread->latest_fd += 1;
-  current_thread->latest_fd = find_first_unused_fd ();
-  return current_thread->latest_fd;
-}
-
-/* Iterates through the fd_table starting from latest_fd
-   and returns the index of the first empty spot */
-int
-find_first_unused_fd (void)
-{
-  int i;
-  struct thread *current_thread = thread_current();
-  for (i = current_thread->latest_fd; i < 128; i++)
-      if (current_thread->fd_table[i] == NULL)
-        return i;
-  for (i = 2; i < 128; i++)
-    if (current_thread->fd_table[i] == NULL)
-      return i;
-  return 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -255,35 +182,13 @@ thread_create (const char *name, int priority,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
-  // Save info passed in by parent to child thread.
   tid = t->tid = allocate_tid ();
-  char *file_name;
-  if (*(char **) aux == "/////")
-    {
-      file_name = ((char **) aux)[1];
-      t->info = (struct child_info *) (((char **) aux) [2]);
-    }
-  else
-    {
-      struct child_info *info = (struct child_info *) malloc (sizeof (struct child_info));
-      info->wait_semaphore = (struct semaphore *) malloc (sizeof (struct semaphore));
-      info->wait_child_exec = (struct semaphore *) malloc (sizeof (struct semaphore));
-      info->process_loaded = (int *) malloc (sizeof (int));
-      sema_init (info->wait_semaphore, 0);
-      sema_init (info->wait_child_exec, 0);
-      *(info->process_loaded) = 0;
-      info->counter = 1;
-      info->exit_code = 0;
-      t->info = info;
-      file_name = (char *) aux;
-    }
-  t->info->pid = tid;
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
   kf->function = function;
-  kf->aux = file_name;
+  kf->aux = aux;
 
   /* Stack frame for switch_entry(). */
   ef = alloc_frame (t, sizeof *ef);
@@ -376,54 +281,21 @@ thread_tid (void)
 void
 thread_exit (void)
 {
-  struct thread *current_thread = thread_current ();
-  if (*current_thread->info->process_loaded)
-    printf("%s: exit(%d)\n", (char *) current_thread->name, current_thread->info->exit_code);
-  current_thread->info->counter--;
-  // Turn off interrupts to ensure list functions don't break.
-  intr_disable ();
-  // Remove child info from the childrens list and free if parent is dead.
-  sema_up (current_thread->info->wait_semaphore);
-  if (!current_thread->info->counter)
-    {
-      free (current_thread->info->process_loaded);
-      free (current_thread->info->wait_child_exec);
-      free (current_thread->info->wait_semaphore);
-      free (current_thread->info);
-    }
-  lock_filesys ();
-  file_close (current_thread->executable);
-  free_thread_files ();
-  release_filesys ();
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
   process_exit ();
 #endif
+  syscall_exit ();
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
-  list_remove (&current_thread->allelem);
+  intr_disable ();
+  list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
-}
-
-void
-free_thread_files (void)
-{
-  int i;
-  struct thread *current_thread = thread_current ();
-  for (i = 3; i < 128; i++)
-    {
-      if (current_thread->fd_table[i])
-        {
-          file_close(current_thread->fd_table[i]);
-          current_thread->fd_table[i] = NULL;
-        }
-
-    }
 }
 
 /* Yields the CPU.  The current thread is not put to sleep and
@@ -505,7 +377,7 @@ thread_get_recent_cpu (void)
   /* Not yet implemented. */
   return 0;
 }
-
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -554,7 +426,7 @@ kernel_thread (thread_func *function, void *aux)
   function (aux);       /* Execute the thread function. */
   thread_exit ();       /* If function() returns, kill the thread. */
 }
-
+
 /* Returns the running thread. */
 struct thread *
 running_thread (void)
@@ -592,11 +464,10 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->latest_fd = 2; // First three should be taken by stdin, stdout, stderr.
-  struct file *dummy;
-  // Populate first three so they aren't overwritten. Do not try to access them.
-  t->fd_table[0] = t->fd_table[1] = dummy;
   list_init (&t->children);
+  t->wait_status = NULL;
+  list_init (&t->fds);
+  t->next_handle = 2;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -713,7 +584,7 @@ allocate_tid (void)
 
   return tid;
 }
-
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);

@@ -5,8 +5,6 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
-#include "threads/fixed-point.h"
-#include "filesys/file.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -20,7 +18,6 @@ enum thread_status
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
-typedef int pid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
 /* Thread priorities. */
@@ -94,45 +91,46 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
 
+    /* Owned by process.c. */
+    struct wait_status *wait_status;    /* This process's completion status. */
+    struct list children;               /* Completion status of children. */
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    struct child_info *info;            /* A struct used to return child info to parent */
-    struct list children;               /* List of all of this thread's children's child info */
-    struct file *executable;            /* Keep track of your own executable */
-    struct file *fd_table[128];         /* File descriptor table */
-    int latest_fd;                      /* Keep track of the latest file descriptor used; */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 #endif
+    struct file *bin_file;              /* Executable. */
+
+    /* Owned by syscall.c. */
+    struct list fds;                    /* List of file descriptors. */
+    int next_handle;                    /* Next handle value. */
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
 
-struct child_info
+/* Tracks the completion of a process.
+   Reference held by both the parent, in its `children' list,
+   and by the child, in its `wait_status' pointer. */
+struct wait_status
   {
-    /* Used to pass info between parent and child thread */
-    struct semaphore *wait_semaphore;
-    struct semaphore *wait_child_exec;   /* A reference to the semaphore used to release parent from
-                                            waiting for child to finish loading */
-    int *process_loaded;
-    int exit_code;
-    pid_t pid;
-    struct list_elem elem;
-    int counter;
+    struct list_elem elem;              /* `children' list element. */
+    struct lock lock;                   /* Protects ref_cnt. */
+    int ref_cnt;                        /* 2=child and parent both alive,
+                                           1=either child or parent alive,
+                                           0=child and parent both dead. */
+    tid_t tid;                          /* Child thread id. */
+    int exit_code;                      /* Child exit code, if dead. */
+    struct semaphore dead;              /* 1=child alive, 0=child dead. */
   };
+
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-
-int insert_file_to_fd_table (struct file *);
-struct file *get_file (int);
-void close_file (int);
-void lock_filesys (void);
-void release_filesys (void);
 
 void thread_init (void);
 void thread_start (void);
