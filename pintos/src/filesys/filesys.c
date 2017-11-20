@@ -108,7 +108,7 @@ bool
 filesys_remove (const char *name)
 {
   struct dir *last_dir = get_last_directory (name);
-  if (!last_dir) {
+  if (!last_dir || !strcmp(name, "/")) {
     return false;
   }
   char *file_name = malloc (NAME_MAX + 1);

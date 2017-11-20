@@ -563,6 +563,10 @@ get_last_directory (const char *path) {
     return get_last_directory_relative (path);
 }
 
+
+/* Tries to open the folder that the listed file is in. For example,
+   if /a/b/c is passed in, it will try to open /a/b and return that directory.
+   If /a is passed in, then it will return the root directory. */
 struct dir *
 get_last_directory_absolute (const char *path) {
   if (!path || strcmp(path, "") == 0)
@@ -586,12 +590,14 @@ get_last_directory_absolute (const char *path) {
       return dir_open_root ();
     }
   dir = dir_open_root ();
-  struct dir *prev = dir;
+  struct dir *prev = dir_reopen (dir);
   struct inode *inode;
   while (next_part) {
     if (next_part == -1)
       {
         printf("File name too long");
+        dir_close (dir);
+        dir_close (prev);
         free (part);
         free (absolute);
         return NULL;
@@ -601,15 +607,19 @@ get_last_directory_absolute (const char *path) {
         if (dir_lookup (dir, part, &inode))
           {
             next_part = get_next_part (part, &iter_path);
-            if (prev != dir)
-              dir_close (prev); // Might need to synchronize closing directory inode?
+            dir_close (prev); // Might need to synchronize closing directory inode?
             prev = dir;
             dir = dir_open(inode);
           }
         else
           {
+            next_part = get_next_part (part, &iter_path);
             if (next_part == 0)
-              break;
+              {
+                dir_close (prev);
+                prev = dir_reopen (dir);
+                break;
+              }
             else
               {
                 free (part);
@@ -621,13 +631,16 @@ get_last_directory_absolute (const char *path) {
           }
       }
   }
-  if (dir != prev)
-    dir_close(dir);
+  dir_close (dir);
   free (part);
   free (absolute);
   return prev;
 }
 
+
+/* Tries to open the folder that the listed file is in. For example,
+   if a/b/c is passed in, it will try to open a/b and return that directory.
+   If a is passed in, then it will return the thread's current directory. */
 struct dir *
 get_last_directory_relative (const char *path)
 {
@@ -722,8 +735,7 @@ sys_isdir (int fd)
       struct file_descriptor *fd;
       fd = list_entry (e, struct file_descriptor, elem);
       if (fd->handle == fd)
-          if (fd->dir)
-            return true;
+          return fd->dir;
       next = list_next (e);
     }
   return false;
