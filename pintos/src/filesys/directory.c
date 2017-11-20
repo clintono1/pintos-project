@@ -191,6 +191,16 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
   /* Write slot. */
   e.in_use = true;
   e.is_dir = is_dir;
+  if (is_dir)
+    {
+      struct inode *inode = inode_open (inode_sector);
+      if (!inode)
+        return false;
+      struct dir *new_dir = dir_open (inode);
+      if (!new_dir)
+        return false;
+      add_default_directories (new_dir, dir);
+    }
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
@@ -254,4 +264,42 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
         }
     }
   return false;
+}
+
+
+/* Checks if a directory is empty */
+bool
+dir_is_empty (struct dir *dir)
+{
+  char tmp[15];
+  int counter = 0;
+  struct dir *directory = dir_reopen(dir);
+  while(dir_readdir(directory, tmp)) {
+    counter++;
+  }
+  dir_close (directory);
+  return counter == 2; // Directory only has . and ..
+}
+
+bool
+add_default_directories (struct dir *dir, struct dir *parent_dir)
+{
+  struct dir_entry e;
+  // Add parent directory
+  e.inode_sector = parent_dir->inode->sector;
+  strlcpy (e.name, "..", NAME_MAX + 1);
+  e.is_dir = true;
+  e.in_use = dir->inode->removed; // Synchronization?
+  inode_write_at (dir->inode, &e, sizeof (e), dir->pos); // Error check?
+  dir->pos += sizeof (e);
+
+  // Add current directory.
+  e.inode_sector = dir->inode->sector;
+  strlcpy (e.name, ".", NAME_MAX + 1);
+  e.is_dir = true;
+  e.in_use = dir->inode->removed; // Synchronization?
+  inode_write_at (dir->inode, &e, sizeof (e), dir->pos); // Error check?
+  dir->pos += sizeof (e);
+
+  return true;
 }
