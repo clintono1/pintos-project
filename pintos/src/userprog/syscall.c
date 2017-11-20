@@ -36,9 +36,6 @@ static bool sys_readdir (int fd, char *name);
 static bool sys_isdir (int fd);
 static bool sys_inumber (int fd);
 static int get_next_part (char part[NAME_MAX + 1], const char **srcp);
-struct dir * get_last_directory (const char *path);
-struct dir * get_last_directory_absolute (const char *path);
-struct dir * get_last_directory_relative (const char *path);
 
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t);
@@ -521,6 +518,8 @@ sys_mkdir (const char *dir)
     }
   else
     {
+      if (new_file_sector != 0)
+        free_map_release (new_file_sector, 1);
       free (dir_name);
       return false;
     }
