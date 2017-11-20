@@ -36,6 +36,9 @@ static bool sys_readdir (int fd, char *name);
 static bool sys_isdir (int fd);
 static bool sys_inumber (int fd);
 static int get_next_part (char part[NAME_MAX + 1], const char **srcp);
+struct dir * get_last_directory (const char *path);
+struct dir * get_last_directory_absolute (const char *path);
+struct dir * get_last_directory_relative (const char *path);
 
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t);
@@ -477,7 +480,32 @@ sys_chdir (const char *dir)
 static bool
 sys_mkdir (const char *dir)
 {
-
+  struct dir *last_dir = get_last_directory (dir);
+  if (!last_dir) {
+    return false;
+  }
+  char *dir_name = malloc (NAME_MAX + 1);
+  char *path = malloc (strlen (dir) + 1);
+  char *iter_path = path;
+  strlcpy (iter_path, dir, strlen (dir) + 1);
+  while (get_next_part (dir_name, &iter_path) == 1);
+  block_sector_t new_file_sector;
+  free (path);
+  if (!free_map_allocate (1, &new_file_sector))
+    {
+      free (dir_name);
+      return false;
+    }
+  if (dir_add (last_dir, dir_name, new_file_sector))
+    {
+      free (dir_name);
+      return true;
+    }
+  else
+    {
+      free (dir_name);
+      return false;
+    }
 }
 
 /* Read directory system call */
@@ -485,6 +513,154 @@ static bool
 sys_readdir (int fd, char *name)
 {
 
+}
+
+struct dir *
+get_last_directory (const char *path) {
+  if (!path || strcmp(path, "") == 0)
+    return NULL;
+  if (*path == '/')
+    return get_last_directory_absolute (path);
+  else
+    return get_last_directory_relative (path);
+}
+
+struct dir *
+get_last_directory_absolute (const char *path) {
+  if (!path || strcmp(path, "") == 0)
+    return NULL;
+  char *part = malloc (NAME_MAX + 1);
+  char *absolute = malloc (strlen (path) + 1);
+  char *iter_path = absolute;
+  strlcpy (absolute, path, strlen (path) + 1);
+  struct dir *dir;
+  int next_part = get_next_part(part, &iter_path);
+  if (next_part == -1)
+    {
+      free (part);
+      free (absolute);
+      return NULL;
+    }
+  else if (next_part == 0)
+    {
+      free (part);
+      free (absolute);
+      return dir_open_root ();
+    }
+  dir = dir_open_root ();
+  struct dir *prev = dir;
+  struct inode *inode;
+  while (next_part) {
+    if (next_part == -1)
+      {
+        printf("File name too long");
+        free (part);
+        free (absolute);
+        return NULL;
+      }
+    else
+      {
+        if (dir_lookup (dir, part, &inode))
+          {
+            next_part = get_next_part (part, &iter_path);
+            dir_close (prev); // Might need to synchronize closing directory inode?
+            prev = dir;
+            dir = dir_open(inode);
+          }
+        else
+          {
+            if (next_part == 0)
+              break;
+            else
+              {
+                free (part);
+                free (absolute);
+                dir_close (dir);
+                dir_close (prev);
+                return NULL;
+              }
+          }
+      }
+  }
+  if (dir != prev)
+    dir_close(dir);
+  free (part);
+  free (absolute);
+  return prev;
+}
+
+struct dir *
+get_last_directory_relative (const char *path)
+{
+  if (!path || strcmp(path, "") == 0)
+    return NULL;
+  char *part = malloc (NAME_MAX + 1);
+  char *relative = malloc (strlen (path) + 1);
+  char *iter_path = relative;
+  strlcpy (relative, path, strlen (path) + 1);
+  int next_part = get_next_part(part, &iter_path);
+  if (next_part == -1)
+    {
+      free (part);
+      free (relative);
+      return NULL;
+    }
+  else if (next_part == 0)
+    {
+      free (part);
+      free (relative);
+      return thread_current ()->cwd;
+    }
+  struct dir *cwd = thread_current ()->cwd;
+  struct dir *dir = dir_reopen (cwd);
+  struct dir *prev = dir;
+
+  struct dir_entry e;
+  size_t ofs;
+  struct inode *inode;
+  bool found;
+  while (next_part)
+    {
+      if (next_part == -1)
+        {
+          dir_close (dir);
+          if (prev != dir)
+            dir_close (prev);
+          free (part);
+          free (relative);
+          return NULL;
+        }
+      found = false;
+      for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+           ofs += sizeof e)
+        if (!strcmp (part, e.name))
+          {
+            inode = inode_open (e.inode_sector); // Must make this synchronized.
+            if (inode->data.is_dir) {
+              dir_close (prev);
+              prev = dir;
+              dir = dir_open (inode);
+              found = true;
+            }
+            break;
+          }
+      next_part = get_next_part(part, &iter_path);
+      if (next_part == 0)
+        break;
+      if (!found && next_part == 1)
+        {
+          free (part);
+          free (relative);
+          dir_close (dir);
+          dir_close (dir);
+          return NULL;
+        }
+    }
+  if (dir != prev)
+    dir_close (dir);
+  free (part);
+  free (relative);
+  return prev;
 }
 
 /* Isdir directory system call */

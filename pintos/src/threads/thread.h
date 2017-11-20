@@ -107,6 +107,7 @@ struct thread
     /* Owned by syscall.c. */
     struct list fds;                    /* List of file descriptors. */
     int next_handle;                    /* Next handle value. */
+    struct dir *cwd;                    /* Current directory */
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
