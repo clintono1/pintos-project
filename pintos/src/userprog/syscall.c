@@ -473,7 +473,25 @@ sys_practice (int num)
 static bool
 sys_chdir (const char *dir)
 {
-
+  struct dir *last_dir = get_last_directory (dir);
+  if (!last_dir) {
+    return false;
+  }
+  char *dir_name = malloc (NAME_MAX + 1);
+  char *path = malloc (strlen (dir) + 1);
+  char *iter_path = path;
+  strlcpy (iter_path, dir, strlen (dir) + 1);
+  while (get_next_part (dir_name, &iter_path) == 1);
+  free (path);
+  struct inode *inode;
+  dir_lookup (last_dir, dir_name, &inode);
+  if (inode)
+    {
+      dir_close (thread_current ()->cwd);
+      thread_current ()->cwd = dir_open (inode);
+      return true;
+    }
+  return false;
 }
 
 /* Make directory system call */
@@ -563,7 +581,8 @@ get_last_directory_absolute (const char *path) {
         if (dir_lookup (dir, part, &inode))
           {
             next_part = get_next_part (part, &iter_path);
-            dir_close (prev); // Might need to synchronize closing directory inode?
+            if (prev != dir)
+              dir_close (prev); // Might need to synchronize closing directory inode?
             prev = dir;
             dir = dir_open(inode);
           }
@@ -614,7 +633,7 @@ get_last_directory_relative (const char *path)
   struct dir *cwd = thread_current ()->cwd;
   struct dir *dir = dir_reopen (cwd);
   struct dir *prev = dir;
-
+  bool prev_in_use = true;
   struct dir_entry e;
   size_t ofs;
   struct inode *inode;
@@ -635,10 +654,12 @@ get_last_directory_relative (const char *path)
            ofs += sizeof e)
         if (!strcmp (part, e.name))
           {
-            inode = inode_open (e.inode_sector); // Must make this synchronized.
-            if (inode->data.is_dir) {
-              dir_close (prev);
+            if (e.is_dir) {
+              inode = inode_open (e.inode_sector); // Must make this synchronized.
+              if (prev != dir)
+                dir_close (prev);
               prev = dir;
+              prev_in_use = e.in_use;
               dir = dir_open (inode);
               found = true;
             }
@@ -660,7 +681,8 @@ get_last_directory_relative (const char *path)
     dir_close (dir);
   free (part);
   free (relative);
-  return prev;
+  if (prev_in_use)
+    return prev;
 }
 
 /* Isdir directory system call */
