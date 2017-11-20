@@ -653,10 +653,10 @@ get_last_directory_relative (const char *path)
   struct dir *cwd = thread_current ()->cwd;
   struct dir *dir = dir_reopen (cwd);
   struct dir *prev = dir;
-  bool prev_in_use = true;
   struct dir_entry e;
   size_t ofs;
-  struct inode *inode;
+  struct inode *inode = dir->inode;
+  struct inode *prev_inode = inode;
   bool found;
   while (next_part)
     {
@@ -675,11 +675,11 @@ get_last_directory_relative (const char *path)
         if (!strcmp (part, e.name))
           {
             if (e.is_dir) {
+              prev_inode = inode;
               inode = inode_open (e.inode_sector); // Must make this synchronized.
               if (prev != dir)
                 dir_close (prev);
               prev = dir;
-              prev_in_use = e.in_use;
               dir = dir_open (inode);
               found = true;
             }
@@ -701,7 +701,7 @@ get_last_directory_relative (const char *path)
     dir_close (dir);
   free (part);
   free (relative);
-  if (prev_in_use)
+  if (!prev_inode->removed)
     return prev;
 }
 

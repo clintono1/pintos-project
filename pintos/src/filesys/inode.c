@@ -254,7 +254,7 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-  block_read (fs_device, inode->sector, &inode->data);
+  cache_get_block (inode->sector, &inode->data);
   return inode;
 }
 
