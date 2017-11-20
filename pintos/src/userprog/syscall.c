@@ -35,7 +35,6 @@ static bool sys_mkdir (const char *dir);
 static bool sys_readdir (int fd, char *name);
 static bool sys_isdir (int fd);
 static bool sys_inumber (int fd);
-static int get_next_part (char part[NAME_MAX + 1], const char **srcp);
 
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t);
@@ -269,8 +268,17 @@ sys_open (const char *ufile)
   fd = malloc (sizeof *fd);
   if (fd != NULL)
     {
-      fd->file = filesys_open (kfile);
-      if (fd->file != NULL)
+      if (is_valid_dir (kfile))
+        {
+          fd->dir = dir_open (kfile);
+          fd->file = NULL;
+        }
+      else
+        {
+          fd->dir = NULL;
+          fd->file = filesys_open (kfile);
+        }
+      if (fd->file || fd->dir)
         {
           struct thread *cur = thread_current ();
           handle = fd->handle = cur->next_handle++;
@@ -336,6 +344,10 @@ sys_read (int handle, void *udst_, unsigned size)
 
   /* Handle all other reads. */
   fd = lookup_fd (handle);
+
+  if (fd->dir)
+    return -1;
+
   while (size > 0)
     {
       /* How much to read into this page? */
@@ -382,7 +394,8 @@ sys_write (int handle, void *usrc_, unsigned size)
   /* Lookup up file descriptor. */
   if (handle != STDOUT_FILENO)
     fd = lookup_fd (handle);
-
+    if (fd && fd->dir)
+      return -1;
   while (size > 0)
     {
       /* How much bytes to write to this page? */
@@ -486,8 +499,11 @@ sys_chdir (const char *dir)
     {
       dir_close (thread_current ()->cwd);
       thread_current ()->cwd = dir_open (inode);
+      free (dir_name);
       return true;
     }
+  dir_close (last_dir);
+  free (dir_name);
   return false;
 }
 
@@ -508,11 +524,13 @@ sys_mkdir (const char *dir)
   free (path);
   if (!free_map_allocate (1, &new_file_sector))
     {
+      dir_close (last_dir);
       free (dir_name);
       return false;
     }
-  if (dir_add (last_dir, dir_name, new_file_sector))
+  if (dir_add (last_dir, dir_name, new_file_sector, true))
     {
+      dir_close (last_dir);
       free (dir_name);
       return true;
     }
@@ -520,6 +538,7 @@ sys_mkdir (const char *dir)
     {
       if (new_file_sector != 0)
         free_map_release (new_file_sector, 1);
+      dir_close (last_dir);
       free (dir_name);
       return false;
     }
@@ -536,6 +555,8 @@ struct dir *
 get_last_directory (const char *path) {
   if (!path || strcmp(path, "") == 0)
     return NULL;
+  if (!thread_current ()->cwd)
+    thread_current ()->cwd = dir_open_root ();
   if (*path == '/')
     return get_last_directory_absolute (path);
   else
@@ -733,7 +754,7 @@ sys_inumber (int fd)
 /* Extracts a file name part from *SRCP into PART, and updates *SRCP so that the
 next call will return the next file name part. Returns 1 if successful, 0 at
 end of string, -1 for a too-long file name part. */
-static int
+int
 get_next_part (char part[NAME_MAX + 1], const char **srcp) {
   const char *src = *srcp;
   char *dst = part;
