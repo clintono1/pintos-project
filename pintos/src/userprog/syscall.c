@@ -652,19 +652,18 @@ get_last_directory_relative (const char *path)
     }
   struct dir *cwd = thread_current ()->cwd;
   struct dir *dir = dir_reopen (cwd);
-  struct dir *prev = dir;
+  struct dir *prev = dir_reopen (cwd);
   struct dir_entry e;
   size_t ofs;
-  struct inode *inode = dir->inode;
-  struct inode *prev_inode = inode;
+  struct inode *inode = dir->inode;;
+  struct inode *prev_inode = prev->inode;
   bool found;
   while (next_part)
     {
       if (next_part == -1)
         {
           dir_close (dir);
-          if (prev != dir)
-            dir_close (prev);
+          dir_close (prev);
           free (part);
           free (relative);
           return NULL;
@@ -675,11 +674,10 @@ get_last_directory_relative (const char *path)
         if (!strcmp (part, e.name))
           {
             if (e.is_dir) {
-              prev_inode = inode;
-              inode = inode_open (e.inode_sector); // Must make this synchronized.
-              if (prev != dir)
-                dir_close (prev);
+              dir_close (prev);
               prev = dir;
+              prev_inode = prev->inode;
+              inode = inode_open (e.inode_sector); // Must make this synchronized.
               dir = dir_open (inode);
               found = true;
             }
@@ -687,22 +685,29 @@ get_last_directory_relative (const char *path)
           }
       next_part = get_next_part(part, &iter_path);
       if (next_part == 0)
-        break;
+        {
+          if (!found)
+            {
+              dir_close (prev);
+              prev = dir_reopen (dir);
+            }
+          break;
+        }
       if (!found && next_part == 1)
         {
           free (part);
           free (relative);
-          dir_close (dir);
+          dir_close (prev);
           dir_close (dir);
           return NULL;
         }
     }
-  if (dir != prev)
-    dir_close (dir);
+  dir_close (dir);
   free (part);
   free (relative);
   if (!prev_inode->removed)
     return prev;
+  dir_close (prev);
 }
 
 /* Isdir directory system call */

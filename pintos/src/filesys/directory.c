@@ -193,6 +193,8 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
   e.is_dir = is_dir;
   if (is_dir)
     {
+      if (!dir_create (inode_sector, 512 / sizeof (struct dir_entry)))
+        return false;
       struct inode *inode = inode_open (inode_sector);
       if (!inode)
         return false;
@@ -200,6 +202,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
       if (!new_dir)
         return false;
       add_default_directories (new_dir, dir);
+      dir_close (new_dir);
     }
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
@@ -289,7 +292,7 @@ add_default_directories (struct dir *dir, struct dir *parent_dir)
   e.inode_sector = parent_dir->inode->sector;
   strlcpy (e.name, "..", NAME_MAX + 1);
   e.is_dir = true;
-  e.in_use = dir->inode->removed; // Synchronization?
+  e.in_use = !parent_dir->inode->removed; // Synchronization?
   inode_write_at (dir->inode, &e, sizeof (e), dir->pos); // Error check?
   dir->pos += sizeof (e);
 
@@ -297,7 +300,7 @@ add_default_directories (struct dir *dir, struct dir *parent_dir)
   e.inode_sector = dir->inode->sector;
   strlcpy (e.name, ".", NAME_MAX + 1);
   e.is_dir = true;
-  e.in_use = dir->inode->removed; // Synchronization?
+  e.in_use = !dir->inode->removed; // Synchronization?
   inode_write_at (dir->inode, &e, sizeof (e), dir->pos); // Error check?
   dir->pos += sizeof (e);
 
