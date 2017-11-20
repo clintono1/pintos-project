@@ -30,6 +30,20 @@ struct lock cache_lock; // Lock actions that check the cache.
 /* Uses the clock algorithm and returns the index of the cache block that
    should be evicted. This function is NOT thread-safe. You must acquire
    the cache_lock before calling this. */
+
+/* Write all cache entries to disk */
+void
+flush_cache (void)
+{
+  int i;
+  for (i = 0; i < 64; i++)
+    {
+      if (cache[i] && cache[i]->valid && cache[i]->dirty)
+        block_write (fs_device, cache[i]->sector, cache[i]->block);
+    }
+}
+
+
 int
 get_next_cache_block_to_evict (void)
 {
@@ -206,14 +220,14 @@ inode_create (block_sector_t sector, off_t length)
       disk_inode->magic = INODE_MAGIC;
       if (free_map_allocate (sectors, &disk_inode->start))
         {
-          block_write (fs_device, sector, disk_inode);
+          cache_write_block (sector, disk_inode);
           if (sectors > 0)
             {
               static char zeros[BLOCK_SECTOR_SIZE];
               size_t i;
 
               for (i = 0; i < sectors; i++)
-                block_write (fs_device, disk_inode->start + i, zeros);
+                cache_write_block (disk_inode->start + i, zeros);
             }
           success = true;
         }

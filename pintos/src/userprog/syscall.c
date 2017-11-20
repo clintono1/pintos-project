@@ -792,4 +792,7 @@ syscall_exit (void)
       file_close (fd->file);
       free (fd);
     }
+
+  if (!strcmp(cur->name, "main"))
+    flush_cache ();
 }
