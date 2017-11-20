@@ -88,15 +88,15 @@ filesys_open (const char *name)
   if (!last_dir) {
     return false;
   }
-  char *dir_name = malloc (NAME_MAX + 1);
+  char *file_name = malloc (NAME_MAX + 1);
   char *path = malloc (strlen (name) + 1);
   char *iter_path = path;
   strlcpy (iter_path, name, strlen (name) + 1);
-  while (get_next_part (dir_name, &iter_path) == 1);
+  while (get_next_part (file_name, &iter_path) == 1);
   free (path);
   struct inode *inode;
-  dir_lookup (last_dir, dir_name, &inode);
-  free (dir_name);
+  dir_lookup (last_dir, file_name, &inode);
+  free (file_name);
   return file_open (inode);
 }
 
@@ -107,10 +107,18 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name)
 {
-  struct dir *dir = dir_open_root ();
-  bool success = dir != NULL && dir_remove (dir, name);
-  dir_close (dir);
-
+  struct dir *last_dir = get_last_directory (name);
+  if (!last_dir) {
+    return false;
+  }
+  char *file_name = malloc (NAME_MAX + 1);
+  char *path = malloc (strlen (name) + 1);
+  char *iter_path = path;
+  strlcpy (iter_path, name, strlen (name) + 1);
+  while (get_next_part (file_name, &iter_path) == 1);
+  free (path);
+  bool success = dir_remove (last_dir, file_name);
+  free (file_name);
   return success;
 }
 
