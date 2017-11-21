@@ -34,7 +34,7 @@ static bool sys_chdir (const char *dir);
 static bool sys_mkdir (const char *dir);
 static bool sys_readdir (int fd, char *name);
 static bool sys_isdir (int fd);
-static bool sys_inumber (int fd);
+static int sys_inumber (int fd);
 
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t);
@@ -270,7 +270,7 @@ sys_open (const char *ufile)
     {
       if (is_valid_dir (kfile))
         {
-          fd->dir = dir_open (kfile);
+          fd->dir = dir_open_path (kfile);
           fd->file = NULL;
         }
       else
@@ -548,7 +548,10 @@ sys_mkdir (const char *dir)
 static bool
 sys_readdir (int fd, char *name)
 {
-
+  struct file_descriptor *fd_struct = lookup_fd (fd);
+  if (fd_struct->file)
+    return false;
+  return dir_readdir (fd_struct->dir, name);
 }
 
 struct dir *
@@ -742,7 +745,7 @@ sys_isdir (int fd)
 }
 
 /* Inumber directory system call */
-static bool
+static int
 sys_inumber (int fd)
 {
   struct thread *cur = thread_current ();
@@ -751,15 +754,15 @@ sys_inumber (int fd)
 
   for (e = list_begin (&cur->fds); e != list_end (&cur->fds); e = next)
     {
-      struct file_descriptor *fd;
-      fd = list_entry (e, struct file_descriptor, elem);
-      if (fd->handle == fd)
+      struct file_descriptor *fd_struct;
+      fd_struct = list_entry (e, struct file_descriptor, elem);
+      if (fd_struct->handle == fd)
         {
           struct inode *inode;
-          if (fd->file)
-            inode = fd->file->inode;
+          if (fd_struct->file)
+            inode = fd_struct->file->inode;
           else
-            inode = fd->dir->inode;
+            inode = fd_struct->dir->inode;
           return inode_get_inumber (inode);
         }
 

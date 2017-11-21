@@ -65,11 +65,13 @@ filesys_create (const char *name, off_t initial_size)
   inode_create (new_file_sector, initial_size);
   if (dir_add (last_dir, file_name, new_file_sector, false))
     {
+      dir_close (last_dir);
       free (file_name);
       return true;
     }
   else
     {
+      dir_close (last_dir);
       free_map_release (new_file_sector, 1);
       free (file_name);
       return false;
@@ -97,6 +99,7 @@ filesys_open (const char *name)
   struct inode *inode;
   dir_lookup (last_dir, file_name, &inode);
   free (file_name);
+  dir_close (last_dir);
   return file_open (inode);
 }
 
@@ -108,7 +111,7 @@ bool
 filesys_remove (const char *name)
 {
   struct dir *last_dir = get_last_directory (name);
-  if (!last_dir || !strcmp(name, "/")) {
+  if (!last_dir || !strcmp (name, "/")) {
     return false;
   }
   char *file_name = malloc (NAME_MAX + 1);
@@ -118,6 +121,7 @@ filesys_remove (const char *name)
   while (get_next_part (file_name, &iter_path) == 1);
   free (path);
   bool success = dir_remove (last_dir, file_name);
+  dir_close (last_dir);
   free (file_name);
   return success;
 }

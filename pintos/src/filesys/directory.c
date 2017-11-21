@@ -14,6 +14,8 @@ is_valid_dir (const char *dir)
   if (!last_dir) {
     return false;
   }
+  if (!strcmp (dir, "/"))
+    return true;
   char *dir_name = malloc (NAME_MAX + 1);
   char *path = malloc (strlen (dir) + 1);
   char *iter_path = path;
@@ -67,6 +69,31 @@ dir_open (struct inode *inode)
       free (dir);
       return NULL;
     }
+}
+
+struct dir *
+dir_open_path (const char *dir)
+{
+  struct dir *last_dir = get_last_directory (dir);
+  if (!last_dir) {
+    return false;
+  }
+  if (!strcmp (dir, "/"))
+    {
+      dir_close (last_dir);
+      return dir_open_root ();
+    }
+  char *dir_name = malloc (NAME_MAX + 1);
+  char *path = malloc (strlen (dir) + 1);
+  char *iter_path = path;
+  strlcpy (iter_path, dir, strlen (dir) + 1);
+  while (get_next_part (dir_name, &iter_path) == 1);
+  free (path);
+  struct inode *inode;
+  dir_lookup (last_dir, dir_name, &inode);
+  free (dir_name);
+  dir_close (last_dir);
+  return dir_open (inode);
 }
 
 /* Opens the root directory and returns a directory for it.
@@ -193,7 +220,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
   e.is_dir = is_dir;
   if (is_dir)
     {
-      if (!dir_create (inode_sector, 512 / sizeof (struct dir_entry)))
+      if (!dir_create (inode_sector, BLOCK_SECTOR_SIZE / sizeof (struct dir_entry)))
         return false;
       struct inode *inode = inode_open (inode_sector);
       if (!inode)
@@ -260,7 +287,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e)
     {
       dir->pos += sizeof e;
-      if (e.in_use)
+      if (e.in_use && strcmp (e.name, "..") && strcmp (e.name, "."))
         {
           strlcpy (name, e.name, NAME_MAX + 1);
           return true;
@@ -274,14 +301,9 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 bool
 dir_is_empty (struct dir *dir)
 {
-  char tmp[15];
-  int counter = 0;
+  char tmp[NAME_MAX + 1];
   struct dir *directory = dir_reopen(dir);
-  while(dir_readdir(directory, tmp)) {
-    counter++;
-  }
-  dir_close (directory);
-  return counter == 2; // Directory only has . and ..
+  return dir_readdir (directory, tmp);
 }
 
 bool
@@ -301,6 +323,7 @@ add_default_directories (struct dir *dir, struct dir *parent_dir)
   strlcpy (e.name, ".", NAME_MAX + 1);
   e.is_dir = true;
   e.in_use = !dir->inode->removed; // Synchronization?
+
   inode_write_at (dir->inode, &e, sizeof (e), dir->pos); // Error check?
   dir->pos += sizeof (e);
 
