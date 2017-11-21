@@ -262,6 +262,17 @@ dir_remove (struct dir *dir, const char *name)
   if (inode == NULL)
     goto done;
 
+  /* Check if it is a non-empty directory */
+  if (e.is_dir)
+    {
+      struct dir *dir_to_delete = dir_open (inode);
+      if (!dir_is_empty (dir_to_delete))
+        {
+          dir_close (dir_to_delete);
+          return false;
+        }
+    }
+
   /* Erase directory entry. */
   e.in_use = false;
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e)
@@ -303,7 +314,7 @@ dir_is_empty (struct dir *dir)
 {
   char tmp[NAME_MAX + 1];
   struct dir *directory = dir_reopen(dir);
-  return dir_readdir (directory, tmp);
+  return !dir_readdir (directory, tmp);
 }
 
 bool
