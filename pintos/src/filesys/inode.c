@@ -176,15 +176,20 @@ static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos)
 {
   ASSERT (inode != NULL);
+  block_sector_t ret_val;
+  sema_down (&inode->inode_lock);
   if (pos < inode->data.length)
-    return inode->data.start + pos / BLOCK_SECTOR_SIZE;
+    ret_val = inode->data.start + pos / BLOCK_SECTOR_SIZE;
   else
-    return -1;
+    ret_val = -1;
+  sema_up (&inode->inode_lock);
+  return ret_val;
 }
 
 /* List of open inodes, so that opening a single inode twice
    returns the same `struct inode'. */
 static struct list open_inodes;
+struct lock *inode_list_lock;
 
 /* Initializes the inode module. */
 void
@@ -192,7 +197,20 @@ inode_init (void)
 {
   list_init (&open_inodes);
   lock_init (&cache_lock);
+  lock_init (&inode_list_lock);
   clock_hand = -1;
+}
+
+void
+lock_inode_list (void)
+{
+  lock_acquire (&inode_list_lock);
+}
+
+void
+release_inode_list (void)
+{
+  lock_release (&inode_list_lock);
 }
 
 /* Initializes an inode with LENGTH bytes of data and
@@ -246,16 +264,22 @@ inode_open (block_sector_t sector)
   struct inode *inode;
 
   /* Check whether this inode is already open. */
+  lock_inode_list ();
   for (e = list_begin (&open_inodes); e != list_end (&open_inodes);
        e = list_next (e))
     {
       inode = list_entry (e, struct inode, elem);
+      sema_down (&inode->inode_lock);
       if (inode->sector == sector)
         {
-          inode_reopen (inode);
+          inode->open_cnt++;
+          sema_up (&inode->inode_lock);
+          release_inode_list ();
           return inode;
         }
+      sema_up (&inode->inode_lock);
     }
+  release_inode_list ();
 
   /* Allocate memory. */
   inode = malloc (sizeof *inode);
@@ -263,11 +287,15 @@ inode_open (block_sector_t sector)
     return NULL;
 
   /* Initialize. */
+  sema_init (&inode->inode_lock, 0);
+  lock_inode_list ();
   list_push_front (&open_inodes, &inode->elem);
+  release_inode_list ();
   inode->sector = sector;
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
+  sema_up (&inode->inode_lock);
   cache_get_block (inode->sector, &inode->data);
   return inode;
 }
@@ -277,7 +305,11 @@ struct inode *
 inode_reopen (struct inode *inode)
 {
   if (inode != NULL)
-    inode->open_cnt++;
+    {
+      sema_down (&inode->inode_lock);
+      inode->open_cnt++;
+      sema_up (&inode->inode_lock);
+    }
   return inode;
 }
 
@@ -285,7 +317,10 @@ inode_reopen (struct inode *inode)
 block_sector_t
 inode_get_inumber (const struct inode *inode)
 {
-  return inode->sector;
+  sema_down (&inode->inode_lock);
+  block_sector_t sector = inode->sector;
+  sema_up (&inode->inode_lock);
+  return sector;
 }
 
 /* Closes INODE and writes it to disk.
@@ -299,10 +334,13 @@ inode_close (struct inode *inode)
     return;
 
   /* Release resources if this was the last opener. */
+  sema_down (&inode->inode_lock);
   if (--inode->open_cnt == 0)
     {
       /* Remove from inode list and release lock. */
+      lock_inode_list ();
       list_remove (&inode->elem);
+      release_inode_list ();
 
       /* Deallocate blocks if removed. */
       if (inode->removed)
@@ -311,9 +349,11 @@ inode_close (struct inode *inode)
           free_map_release (inode->data.start,
                             bytes_to_sectors (inode->data.length));
         }
-
+      sema_up (&inode->inode_lock);
       free (inode);
+      return;
     }
+  sema_up (&inode->inode_lock);
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who
@@ -322,7 +362,9 @@ void
 inode_remove (struct inode *inode)
 {
   ASSERT (inode != NULL);
+  sema_down (&inode->inode_lock);
   inode->removed = true;
+  sema_up (&inode->inode_lock);
 }
 
 /* Reads SIZE bytes from INODE into BUFFER, starting at position OFFSET.
@@ -392,9 +434,13 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
   uint8_t *bounce = NULL;
-
+  sema_down (&inode->inode_lock);
   if (inode->deny_write_cnt)
-    return 0;
+    {
+      sema_up (&inode->inode_lock);
+      return 0;
+    }
+  sema_up (&inode->inode_lock);
 
   while (size > 0)
     {
@@ -453,8 +499,10 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 void
 inode_deny_write (struct inode *inode)
 {
+  sema_down (&inode->inode_lock);
   inode->deny_write_cnt++;
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
+  sema_up (&inode->inode_lock);
 }
 
 /* Re-enables writes to INODE.
@@ -463,14 +511,19 @@ inode_deny_write (struct inode *inode)
 void
 inode_allow_write (struct inode *inode)
 {
+  sema_down (&inode->inode_lock);
   ASSERT (inode->deny_write_cnt > 0);
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
   inode->deny_write_cnt--;
+  sema_up (&inode->inode_lock);
 }
 
 /* Returns the length, in bytes, of INODE's data. */
 off_t
 inode_length (const struct inode *inode)
 {
-  return inode->data.length;
+  sema_down (&inode->inode_lock);
+  int length = inode->data.length;
+  sema_up (&inode->inode_lock);
+  return length;;
 }

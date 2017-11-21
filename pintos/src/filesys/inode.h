@@ -27,10 +27,13 @@ struct inode
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
+    struct semaphore *inode_lock;       /* Lock the inode */
   };
 
 
 void inode_init (void);
+void lock_inode_list (void);
+void release_inode_list (void);
 bool inode_create (block_sector_t, off_t);
 struct inode *inode_open (block_sector_t);
 struct inode *inode_reopen (struct inode *);
