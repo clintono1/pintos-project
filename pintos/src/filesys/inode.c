@@ -12,18 +12,18 @@
 #define INODE_MAGIC 0x494e4f44
 
 int get_next_cache_block_to_evict (void);
-void cache_write_block (block_sector_t sector, void *buffer);
-void cache_get_block (block_sector_t sector, void *buffer);
+// void cache_write_block (block_sector_t sector, void *buffer);
+// void cache_get_block (block_sector_t sector, void *buffer);
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
-struct inode_disk
-  {
-    block_sector_t start[100];          /* Direct pointers to sectors. */
-    block_sector_t doubly_indirect;     /* Doubly indirect pointer. */
-    off_t length;                       /* File size in bytes. */
-    unsigned magic;                     /* Magic number. */
-    uint32_t unused[25];                /* Not used. */
-  };
+// struct inode_disk
+//   {
+//     block_sector_t start[100];          /* Direct pointers to sectors. */
+//     block_sector_t doubly_indirect;     /* Doubly indirect pointer. */
+//     off_t length;                       /* File size in bytes. */
+//     unsigned magic;                     /* Magic number. */
+//     uint32_t unused[25];                /* Not used. */
+//   };
 
 // bool inode_resize (struct inode_disk id, off_t size);
 
@@ -247,25 +247,51 @@ inode_create (block_sector_t sector, off_t length)
   disk_inode = calloc (1, sizeof *disk_inode);
   if (disk_inode != NULL)
     {
+      if (inode_resize (disk_inode, length))
+        {
+          cache_write_block (sector, disk_inode);
+          success = true;
+        }
       size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
-      if (free_map_allocate (sectors, &disk_inode->start))
-        {
-          cache_write_block (sector, disk_inode);
+      // if (free_map_allocate (sectors, &disk_inode->start))
+      //   {
+      //     cache_write_block (sector, disk_inode);
           if (sectors > 0)
             {
               static char zeros[BLOCK_SECTOR_SIZE];
               size_t i;
+              int limit = sectors > 100 ? 100 : sectors;
+              for (i = 0; i < limit; i++)
+                // TODO: write to nth sector of disk_inode
+                cache_write_block (disk_inode->start[i], zeros);
+              if (sectors > 100)
+                {
 
-              for (i = 0; i < sectors; i++)
-                cache_write_block (disk_inode->start + i, zeros);
+                }
             }
-          success = true;
-        }
+      //     success = true;
+      //   }
       free (disk_inode);
     }
   return success;
+}
+
+/* Returns the sector number of the sector-th sector in ID. */
+block_sector_t
+inode_get_sector (struct inode_disk *id, uint32_t sector)
+{
+  if (sector <= 100)
+    return id->start[sector];
+
+  block_sector_t buffer[128];
+  cache_get_block (id->doubly_indirect, buffer);
+  uint32_t indirect_pointer =  (uint32_t) (sector - 100) / (uint32_t) powf (2, 7); // sector num divided by 2^7 which is the number of sectors for each indirect pointer
+  block_sector_t buffer2[128];
+  cache_get_block (buffer[indirect_pointer], buffer2);
+  uint32_t block = (sector - 100) % (uint32_t) powf (2, 7); // get remainder, which represents the index of the indirect block
+  return buffer2[block];
 }
 
 /* Reads an inode from SECTOR
