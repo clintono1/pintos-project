@@ -31,6 +31,7 @@ struct exec_info
     struct semaphore load_done;         /* "Up"ed when loading complete. */
     struct wait_status *wait_status;    /* Child process. */
     bool success;                       /* Program successfully loaded? */
+    struct dir *cwd;                    /* Parent's working directory */
   };
 
 /* Starts a new thread running a user program loaded from
@@ -48,6 +49,7 @@ process_execute (const char *file_name)
   /* Initialize exec_info. */
   exec.file_name = file_name;
   sema_init (&exec.load_done, 0);
+  exec.cwd = thread_current ()->cwd;
 
   /* Create a new thread to execute FILE_NAME. */
   strlcpy (thread_name, file_name, sizeof thread_name);
@@ -99,6 +101,11 @@ start_process (void *exec_)
       sema_init (&exec->wait_status->dead, 0);
     }
 
+  /* Inherit parent's cwd */
+  if (exec->cwd)
+    thread_current ()->cwd = dir_reopen (exec->cwd);
+  else
+    thread_current ()->cwd = dir_open_root ();
   /* Notify parent thread and clean up. */
   exec->success = success;
   sema_up (&exec->load_done);

@@ -6,6 +6,7 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
+#include "userprog/syscall.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -35,6 +36,7 @@ filesys_init (bool format)
 void
 filesys_done (void)
 {
+  flush_cache ();
   free_map_close ();
 }
 
@@ -45,17 +47,36 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size)
 {
-  block_sector_t inode_sector = 0;
-  struct dir *dir = dir_open_root ();
-  bool success = (dir != NULL
-                  && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size)
-                  && dir_add (dir, name, inode_sector));
-  if (!success && inode_sector != 0)
-    free_map_release (inode_sector, 1);
-  dir_close (dir);
-
-  return success;
+  struct dir *last_dir = get_last_directory (name);
+  if (!last_dir) {
+    return false;
+  }
+  char *file_name = malloc (NAME_MAX + 1);
+  char *path = malloc (strlen (name) + 1);
+  char *iter_path = path;
+  strlcpy (iter_path, name, strlen (name) + 1);
+  while (get_next_part (file_name, &iter_path) == 1);
+  block_sector_t new_file_sector = 0;
+  free (path);
+  if (!free_map_allocate (1, &new_file_sector))
+    {
+      free (file_name);
+      return false;
+    }
+  inode_create (new_file_sector, initial_size);
+  if (dir_add (last_dir, file_name, new_file_sector, false))
+    {
+      dir_close (last_dir);
+      free (file_name);
+      return true;
+    }
+  else
+    {
+      dir_close (last_dir);
+      free_map_release (new_file_sector, 1);
+      free (file_name);
+      return false;
+    }
 }
 
 /* Opens the file with the given NAME.
@@ -66,13 +87,20 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
-  struct dir *dir = dir_open_root ();
-  struct inode *inode = NULL;
-
-  if (dir != NULL)
-    dir_lookup (dir, name, &inode);
-  dir_close (dir);
-
+  struct dir *last_dir = get_last_directory (name);
+  if (!last_dir) {
+    return false;
+  }
+  char *file_name = malloc (NAME_MAX + 1);
+  char *path = malloc (strlen (name) + 1);
+  char *iter_path = path;
+  strlcpy (iter_path, name, strlen (name) + 1);
+  while (get_next_part (file_name, &iter_path) == 1);
+  free (path);
+  struct inode *inode;
+  dir_lookup (last_dir, file_name, &inode);
+  free (file_name);
+  dir_close (last_dir);
   return file_open (inode);
 }
 
@@ -83,10 +111,19 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name)
 {
-  struct dir *dir = dir_open_root ();
-  bool success = dir != NULL && dir_remove (dir, name);
-  dir_close (dir);
-
+  struct dir *last_dir = get_last_directory (name);
+  if (!last_dir || !strcmp (name, "/")) {
+    return false;
+  }
+  char *file_name = malloc (NAME_MAX + 1);
+  char *path = malloc (strlen (name) + 1);
+  char *iter_path = path;
+  strlcpy (iter_path, name, strlen (name) + 1);
+  while (get_next_part (file_name, &iter_path) == 1);
+  free (path);
+  bool success = dir_remove (last_dir, file_name);
+  dir_close (last_dir);
+  free (file_name);
   return success;
 }
 
