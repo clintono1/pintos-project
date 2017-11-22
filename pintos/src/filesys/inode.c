@@ -18,11 +18,14 @@ void cache_get_block (block_sector_t sector, void *buffer);
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
-    block_sector_t start;               /* First data sector. */
+    block_sector_t start[100];          /* Direct pointers to sectors. */
+    block_sector_t doubly_indirect;     /* Doubly indirect pointer. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[125];               /* Not used. */
+    uint32_t unused[25];                /* Not used. */
   };
+
+// bool inode_resize (struct inode_disk id, off_t size);
 
 struct cache_entry
   {
@@ -404,6 +407,9 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   if (inode->deny_write_cnt)
     return 0;
 
+  // if (!inode_resize (inode->data, size))
+  //   return 0;
+
   while (size > 0)
     {
       /* Sector to write, starting byte offset within sector. */
@@ -455,6 +461,95 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 
   return bytes_written;
 }
+
+/* Resizes INODE to be of SIZE size. */
+// bool
+// inode_resize (struct inode_disk id, off_t size)
+// {
+//   block_sector_t sector;
+//   int i;
+//   for (i = 0; i < 100; i++)
+//   {
+//     if (size <= BLOCK_SECTOR_SIZE * i && id.start[i] != 0)
+//       {
+//         free_map_release (id.start[i], 1);
+//         id.start[i] = 0;
+//       }
+//     if (size > BLOCK_SECTOR_SIZE * i && id.start[i] == 0)
+//       {
+//         if (!free_map_allocate (1, sector))
+//           {
+//             inode_resize (id, id.length);
+//             return false;
+//           }
+//         id.start[i] = sector;
+//       }
+//   }
+
+//   block_sector_t buffer[128];
+//   if (id.doubly_indirect == 0)
+//     {
+//       memset (buffer, 0, 512);
+//       if (!free_map_allocate (1, sector))
+//         {
+//           inode_resize (id, id.length);
+//           return false;
+//         }
+//       id.doubly_indirect = sector;
+//     }
+//   else
+//     {
+//       cache_get_block (id.doubly_indirect, buffer);
+//     }
+//   for (i = 0; i < 128; i++)
+//     {
+//       block_sector_t buffer2[128];
+//       if (buffer[i] == 0)
+//         {
+//           memset (buffer2, 0, 512);
+//           if (!free_map_allocate (1, sector))
+//             {
+//               inode_resize (id, id.length);
+//               return false;
+//             }
+//           buffer[i] = sector;
+//         }
+//       else
+//         {
+//           cache_get_block (buffer[i], buffer2);
+//         }
+//       int j;
+//       for (j = 0; j < 128; j++)
+//         {
+//           if (size <= 512 * 100 + (i * (int) powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] != 0)
+//             {
+//               free_map_release (buffer2[j], 1);
+//               buffer2[j] = 0;
+//             }
+//           if (size > 512 * 100 + (i * (int) powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] == 0)
+//             {
+//               if (!free_map_allocate (1, sector))
+//                 {
+//                   inode_resize (id, id.length);
+//                   return false;
+//                 }
+//               buffer2[j] = sector;
+//             }
+//         }
+//       if (size <= 512 * 100 + i * (int) powf (2, 16))
+//         {
+//           free_map_release (buffer[i], 1);
+//           buffer[i] = 0;
+//         }
+//       else
+//         {
+//           cache_write_block (buffer[i], buffer2);
+//         }
+//     }
+//   cache_write_block (id.doubly_indirect, buffer);
+//   id.length = size;
+//   return true;
+// }
 
 /* Disables writes to INODE.
    May be called at most once per inode opener. */
