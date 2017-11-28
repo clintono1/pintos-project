@@ -249,29 +249,28 @@ inode_create (block_sector_t sector, off_t length)
   disk_inode = calloc (1, sizeof *disk_inode);
   if (disk_inode != NULL)
     {
-      // if (inode_resize (disk_inode, length))
-      //   {
-      //     cache_write_block (sector, disk_inode);
-      //     success = true;
-      //   }
       size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
-      if (free_map_allocate (sectors,
-        disk_inode->start))
+      if (inode_resize (disk_inode, length))
         {
           cache_write_block (sector, disk_inode);
-          if (sectors > 0)
-            {
-              static char zeros[BLOCK_SECTOR_SIZE];
-              size_t i;
-              for (i = 0; i < sectors; i++)
-                // TODO: write to nth sector of disk_inode
-                cache_write_block (inode_get_sector (disk_inode, i), zeros);
-                // cache_write_block (disk_inode->start + i, zeros);
-            }
           success = true;
         }
+      // if (free_map_allocate (sectors, disk_inode->start))
+      //   {
+      //     cache_write_block (sector, disk_inode);
+      if (sectors > 0)
+        {
+          static char zeros[BLOCK_SECTOR_SIZE];
+          size_t i;
+          for (i = 0; i < sectors; i++)
+            // TODO: write to nth sector of disk_inode
+            cache_write_block (inode_get_sector (disk_inode, i), zeros);
+            // cache_write_block (disk_inode->start + i, zeros);
+        }
+        //   success = true;
+        // }
       free (disk_inode);
     }
   return success;
@@ -563,6 +562,7 @@ inode_resize (struct inode_disk *id, off_t size)
 
   // Get doubly indirect pointer table
   block_sector_t buffer[128];
+  memset (buffer, 0, 512);
   if (id->doubly_indirect == 0)
     {
       memset (buffer, 0, 512);
@@ -582,47 +582,71 @@ inode_resize (struct inode_disk *id, off_t size)
   for (i = 0; i < 128; i++)
     {
       block_sector_t buffer2[128];
-      if (buffer[i] == 0)
-        {
-          memset (buffer2, 0, 512);
-          if (!free_map_allocate (1, &sector))
-            {
-              inode_resize (id, id->length);
-              return false;
-            }
-          buffer[i] = sector;
-        }
-      else
-        {
-          cache_get_block (buffer[i], buffer2);
-        }
-      int j;
-      // Allocate all necessary sectors in a singly indirect pointer..
-      for (j = 0; j < 128; j++)
-        {
-          if (size <= 512 * 100 + (i * (int) powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] != 0)
-            {
-              free_map_release (buffer2[j], 1);
-              buffer2[j] = 0;
-            }
-          if (size > 512 * 100 + (i * (int) powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] == 0)
-            {
-              if (!free_map_allocate (1, &sector))
-                {
-                  inode_resize (id, id->length);
-                  return false;
-                }
-              buffer2[j] = sector;
-            }
-        }
+      // If we use the doubly indirect pointer
       if (size <= BLOCK_SECTOR_SIZE * 100 + i * (int) powf (2, 16))
         {
-          free_map_release (buffer[i], 1);
-          buffer[i] = 0;
+          if (buffer[i] != 0)
+            {
+              cache_get_block (buffer[i], buffer2);
+              // Free all indirect pointers.
+              int k;
+              for (k = 0; k < 128; k++)
+                {
+                  if (buffer2[k] != 0)
+                    {
+                      free_map_release (buffer2[k], 1);
+                      buffer2[k] = 0;
+                    }
+                }
+              free_map_release (buffer[i], 1);
+              buffer[i] = 0;
+            }
+          continue;
         }
       else
         {
-          cache_write_block (buffer[i], buffer2);
+        if (buffer[i] == 0)
+          {
+            memset (buffer2, 0, 512);
+            if (!free_map_allocate (1, &sector))
+              {
+                inode_resize (id, id->length);
+                return false;
+              }
+            buffer[i] = sector;
+          }
+        else
+          {
+            cache_get_block (buffer[i], buffer2);
+          }
+        int j;
+        // Allocate all necessary sectors in a singly indirect pointer..
+        for (j = 0; j < 128; j++)
+          {
+            if (size <= 512 * 100 + (i * (int) powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] != 0)
+              {
+                free_map_release (buffer2[j], 1);
+                buffer2[j] = 0;
+              }
+            if (size > 512 * 100 + (i * (int) powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] == 0)
+              {
+                if (!free_map_allocate (1, &sector))
+                  {
+                    inode_resize (id, id->length);
+                    return false;
+                  }
+                buffer2[j] = sector;
+              }
+          }
+        if (size <= BLOCK_SECTOR_SIZE * 100 + i * (int) powf (2, 16) && buffer[i] != 0)
+          {
+            free_map_release (buffer[i], 1);
+            buffer[i] = 0;
+          }
+        else
+          {
+            cache_write_block (buffer[i], buffer2);
+          }
         }
     }
   cache_write_block (id->doubly_indirect, buffer);
