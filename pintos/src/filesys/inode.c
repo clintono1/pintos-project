@@ -25,7 +25,9 @@ int get_next_cache_block_to_evict (void);
 //     uint32_t unused[25];                /* Not used. */
 //   };
 
-// bool inode_resize (struct inode_disk id, off_t size);
+bool inode_resize (struct inode_disk *id, off_t size);
+
+block_sector_t inode_get_sector (struct inode_disk *id, uint32_t sector);
 
 struct cache_entry
   {
@@ -262,17 +264,13 @@ inode_create (block_sector_t sector, off_t length)
             {
               static char zeros[BLOCK_SECTOR_SIZE];
               size_t i;
-              int limit = sectors > 100 ? 100 : sectors;
-              for (i = 0; i < limit; i++)
+              for (i = 0; i < sectors; i++)
                 // TODO: write to nth sector of disk_inode
-                cache_write_block (disk_inode->start[i], zeros);
-              if (sectors > 100)
-                {
-
-                }
+                cache_write_block (inode_get_sector (disk_inode, i), zeros);
+                // cache_write_block (disk_inode->start + i, zeros);
             }
-      //     success = true;
-      //   }
+        //   success = true;
+        // }
       free (disk_inode);
     }
   return success;
@@ -538,93 +536,93 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 }
 
 /* Resizes INODE to be of SIZE size. */
-// bool
-// inode_resize (struct inode_disk id, off_t size)
-// {
-//   block_sector_t sector;
-//   int i;
-//   for (i = 0; i < 100; i++)
-//   {
-//     if (size <= BLOCK_SECTOR_SIZE * i && id.start[i] != 0)
-//       {
-//         free_map_release (id.start[i], 1);
-//         id.start[i] = 0;
-//       }
-//     if (size > BLOCK_SECTOR_SIZE * i && id.start[i] == 0)
-//       {
-//         if (!free_map_allocate (1, sector))
-//           {
-//             inode_resize (id, id.length);
-//             return false;
-//           }
-//         id.start[i] = sector;
-//       }
-//   }
+bool
+inode_resize (struct inode_disk *id, off_t size)
+{
+  block_sector_t sector;
+  int i;
+  for (i = 0; i < 100; i++)
+  {
+    if (size <= BLOCK_SECTOR_SIZE * i && id->start[i] != 0)
+      {
+        free_map_release (id->start[i], 1);
+        id->start[i] = 0;
+      }
+    if (size > BLOCK_SECTOR_SIZE * i && id->start[i] == 0)
+      {
+        if (!free_map_allocate (1, sector))
+          {
+            inode_resize (id, id->length);
+            return false;
+          }
+        id->start[i] = sector;
+      }
+  }
 
-//   block_sector_t buffer[128];
-//   if (id.doubly_indirect == 0)
-//     {
-//       memset (buffer, 0, 512);
-//       if (!free_map_allocate (1, sector))
-//         {
-//           inode_resize (id, id.length);
-//           return false;
-//         }
-//       id.doubly_indirect = sector;
-//     }
-//   else
-//     {
-//       cache_get_block (id.doubly_indirect, buffer);
-//     }
-//   for (i = 0; i < 128; i++)
-//     {
-//       block_sector_t buffer2[128];
-//       if (buffer[i] == 0)
-//         {
-//           memset (buffer2, 0, 512);
-//           if (!free_map_allocate (1, sector))
-//             {
-//               inode_resize (id, id.length);
-//               return false;
-//             }
-//           buffer[i] = sector;
-//         }
-//       else
-//         {
-//           cache_get_block (buffer[i], buffer2);
-//         }
-//       int j;
-//       for (j = 0; j < 128; j++)
-//         {
-//           if (size <= 512 * 100 + (i * (int) powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] != 0)
-//             {
-//               free_map_release (buffer2[j], 1);
-//               buffer2[j] = 0;
-//             }
-//           if (size > 512 * 100 + (i * (int) powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] == 0)
-//             {
-//               if (!free_map_allocate (1, sector))
-//                 {
-//                   inode_resize (id, id.length);
-//                   return false;
-//                 }
-//               buffer2[j] = sector;
-//             }
-//         }
-//       if (size <= 512 * 100 + i * (int) powf (2, 16))
-//         {
-//           free_map_release (buffer[i], 1);
-//           buffer[i] = 0;
-//         }
-//       else
-//         {
-//           cache_write_block (buffer[i], buffer2);
-//         }
-//     }
-//   cache_write_block (id.doubly_indirect, buffer);
-//   id.length = size;
-//   return true;
-// }
+  block_sector_t buffer[128];
+  if (id->doubly_indirect == 0)
+    {
+      memset (buffer, 0, 512);
+      if (!free_map_allocate (1, sector))
+        {
+          inode_resize (id, id->length);
+          return false;
+        }
+      id->doubly_indirect = sector;
+    }
+  else
+    {
+      cache_get_block (id->doubly_indirect, buffer);
+    }
+  for (i = 0; i < 128; i++)
+    {
+      block_sector_t buffer2[128];
+      if (buffer[i] == 0)
+        {
+          memset (buffer2, 0, 512);
+          if (!free_map_allocate (1, sector))
+            {
+              inode_resize (id, id->length);
+              return false;
+            }
+          buffer[i] = sector;
+        }
+      else
+        {
+          cache_get_block (buffer[i], buffer2);
+        }
+      int j;
+      for (j = 0; j < 128; j++)
+        {
+          if (size <= 512 * 100 + (i * (int) powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] != 0)
+            {
+              free_map_release (buffer2[j], 1);
+              buffer2[j] = 0;
+            }
+          if (size > 512 * 100 + (i * (int) powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && buffer2[j] == 0)
+            {
+              if (!free_map_allocate (1, sector))
+                {
+                  inode_resize (id, id->length);
+                  return false;
+                }
+              buffer2[j] = sector;
+            }
+        }
+      if (size <= 512 * 100 + i * (int) powf (2, 16))
+        {
+          free_map_release (buffer[i], 1);
+          buffer[i] = 0;
+        }
+      else
+        {
+          cache_write_block (buffer[i], buffer2);
+        }
+    }
+  cache_write_block (id->doubly_indirect, buffer);
+  id->length = size;
+  return true;
+}
 
 /* Disables writes to INODE.
    May be called at most once per inode opener. */
