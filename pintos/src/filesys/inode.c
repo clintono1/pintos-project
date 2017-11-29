@@ -485,11 +485,12 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     }
   sema_up (&inode->inode_lock);
 
-  // if (!inode_resize (inode->data, size))
-  //   return 0;
-
   while (size > 0)
     {
+      // Resize file if necessary.
+      if (inode->data.length < offset + size)
+        if (!inode_resize (&inode->data, offset + size))
+          return 0;
       /* Sector to write, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
