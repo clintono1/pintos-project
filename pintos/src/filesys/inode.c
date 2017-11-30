@@ -54,10 +54,26 @@ flush_cache (void)
   int i;
   for (i = 0; i < 64; i++)
     {
-      if (cache[i] && cache[i]->valid && cache[i]->dirty)
+      if (cache[i] && cache[i]->valid)
         block_write (fs_device, cache[i]->sector, cache[i]->block);
     }
 }
+
+void
+clear_cache (void)
+{
+  int i;
+  for (i = 0; i < 64; i++)
+    {
+      if (cache[i])
+        {
+          free (cache[i]->block);
+          free (cache[i]);
+          cache[i] = NULL;
+        }
+    }
+}
+
 
 
 int

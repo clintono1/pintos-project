@@ -47,6 +47,7 @@ void inode_deny_write (struct inode *);
 void inode_allow_write (struct inode *);
 off_t inode_length (const struct inode *);
 void flush_cache (void);
+void clear_cache (void);
 void cache_write_block (block_sector_t sector, void *buffer);
 void cache_get_block (block_sector_t sector, void *buffer);
 
