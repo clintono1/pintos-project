@@ -188,8 +188,6 @@ dir_lookup (const struct dir *dir, const char *name,
 bool
 dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is_dir)
 {
-  struct dir_entry e;
-  off_t ofs;
   bool success = false;
 
   ASSERT (dir != NULL);
@@ -210,11 +208,25 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
      inode_read_at() will only return a short read at end of file.
      Otherwise, we'd need to verify that we didn't get a short
      read due to something intermittent such as low memory. */
-  for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
-       ofs += sizeof e)
-    if (!e.in_use)
-      break;
-
+  // Extend dir here.
+  struct dir_entry e;
+  off_t ofs = 0;
+  bool found_empty_spot = false;
+  while (inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e)
+    {
+      if (!e.in_use)
+        {
+          found_empty_spot = true;
+          break;
+        }
+      ofs += sizeof e;
+    }
+  if (!found_empty_spot)
+    {
+      inode_resize (&dir->inode->data, dir->inode->data.length +
+                                       sizeof e - (dir->inode->data.length % sizeof e));
+      cache_write_block (dir->inode->sector, &dir->inode->data);
+    }
   /* Write slot. */
   e.in_use = true;
   e.is_dir = is_dir;

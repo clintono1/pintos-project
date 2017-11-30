@@ -63,17 +63,25 @@ filesys_create (const char *name, off_t initial_size)
       free (file_name);
       return false;
     }
-  inode_create (new_file_sector, initial_size);
-  if (dir_add (last_dir, file_name, new_file_sector, false))
+  if (inode_create (new_file_sector, initial_size))
     {
-      dir_close (last_dir);
-      free (file_name);
-      return true;
+      if (dir_add (last_dir, file_name, new_file_sector, false))
+        {
+          dir_close (last_dir);
+          free (file_name);
+          return true;
+        }
+      else
+        {
+          dir_close (last_dir);
+          free_map_release (new_file_sector, 1);
+          free (file_name);
+          return false;
+        }
     }
   else
     {
       dir_close (last_dir);
-      free_map_release (new_file_sector, 1);
       free (file_name);
       return false;
     }

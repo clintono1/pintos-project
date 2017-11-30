@@ -389,8 +389,9 @@ inode_close (struct inode *inode)
       /* Deallocate blocks if removed. */
       if (inode->removed)
         {
-          free_map_release (inode->sector, 1);
           inode_resize (&inode->data, 0);
+          cache_write_block (inode->sector, &inode->data);
+          free_map_release (inode->sector, 1);
         }
       sema_up (&inode->inode_lock);
       free (inode);
@@ -422,6 +423,10 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 
   while (size > 0)
     {
+      // Resize file if necessary.
+      // if (inode->data.length < offset + size)
+      //   if (!inode_resize (&inode->data, offset + size))
+      //     return 0;
       /* Disk sector to read, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
@@ -485,12 +490,16 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     }
   sema_up (&inode->inode_lock);
 
+  // Resize file if necessary.
+  if (inode->data.length < offset + size)
+    {
+      if (!inode_resize (&inode->data, offset + size))
+        return 0;
+      cache_write_block (inode->sector, &inode->data);
+    }
+
   while (size > 0)
     {
-      // Resize file if necessary.
-      if (inode->data.length < offset + size)
-        if (!inode_resize (&inode->data, offset + size))
-          return 0;
       /* Sector to write, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
@@ -597,7 +606,9 @@ inode_truncate_blocks (struct inode_disk *id, off_t size)
     }
 }
 
-/* Resizes INODE to be of SIZE size. */
+/* Resizes INODE to be of SIZE size.
+   You should write the inode_disk to cache after resizing, or
+   the new size will not persist. */
 bool
 inode_resize (struct inode_disk *id, off_t size)
 {
