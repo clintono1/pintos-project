@@ -51,27 +51,34 @@ struct lock cache_lock; // Lock actions that check the cache.
 void
 flush_cache (void)
 {
+  lock_acquire (&cache_lock);
   int i;
   for (i = 0; i < 64; i++)
     {
+      sema_down (&cache[i]->sector_lock);
       if (cache[i] && cache[i]->valid)
         block_write (fs_device, cache[i]->sector, cache[i]->block);
+      sema_up (&cache[i]->sector_lock);
     }
+  lock_release (&cache_lock);
 }
 
 void
 clear_cache (void)
 {
+  lock_acquire (&cache_lock);
   int i;
   for (i = 0; i < 64; i++)
     {
       if (cache[i])
         {
+          sema_down (&cache[i]->sector_lock);
           free (cache[i]->block);
           free (cache[i]);
           cache[i] = NULL;
         }
     }
+  lock_release (&cache_lock);
 }
 
 
@@ -110,11 +117,6 @@ cache_get_block (block_sector_t sector, void *buffer)
           cache[i]->reference = 1;
           lock_release (&cache_lock);
           memcpy (buffer, cache[i]->block, BLOCK_SECTOR_SIZE);
-          // if (sector >= 103) // Used for testing
-          //   {
-          //     memcpy(cache[i]->block, buffer, 1);
-          //     return buffer;
-          //   }
           sema_up (&cache[i]->sector_lock);
           return;
         }
@@ -132,8 +134,8 @@ cache_get_block (block_sector_t sector, void *buffer)
     }
   else
     {
-      entry = malloc(sizeof(struct cache_entry));
-      block = malloc(BLOCK_SECTOR_SIZE);
+      entry = malloc (sizeof(struct cache_entry));
+      block = malloc (BLOCK_SECTOR_SIZE);
       sema_init (&entry->sector_lock, 0);
       cache[index] = entry;
       entry->block = block;
@@ -180,8 +182,8 @@ cache_write_block (block_sector_t sector, void *buffer)
     }
   else
     {
-      entry = malloc(sizeof(struct cache_entry));
-      block = malloc(BLOCK_SECTOR_SIZE);
+      entry = malloc (sizeof(struct cache_entry));
+      block = malloc (BLOCK_SECTOR_SIZE);
       sema_init (&entry->sector_lock, 0);
       cache[index] = entry;
       entry->block = block;
@@ -272,27 +274,20 @@ inode_create (block_sector_t sector, off_t length)
       size_t sectors = bytes_to_sectors (length);
       memset(disk_inode->start, 0, 100 * sizeof(block_sector_t));
       disk_inode->doubly_indirect = 0;
-      disk_inode->length = length;
+      disk_inode->length = 0;
       disk_inode->magic = INODE_MAGIC;
       if (inode_resize (disk_inode, length))
         {
           cache_write_block (sector, disk_inode);
           success = true;
         }
-      // if (free_map_allocate (sectors, disk_inode->start))
-      //   {
-      //     cache_write_block (sector, disk_inode);
       if (sectors > 0)
         {
           static char zeros[BLOCK_SECTOR_SIZE];
           size_t i;
           for (i = 0; i < sectors; i++)
-            // TODO: write to nth sector of disk_inode
             cache_write_block (inode_get_sector (disk_inode, i), zeros);
-            // cache_write_block (disk_inode->start + i, zeros);
         }
-        //   success = true;
-        // }
       free (disk_inode);
     }
   return success;
@@ -439,10 +434,6 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 
   while (size > 0)
     {
-      // Resize file if necessary.
-      // if (inode->data.length < offset + size)
-      //   if (!inode_resize (&inode->data, offset + size))
-      //     return 0;
       /* Disk sector to read, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
@@ -460,6 +451,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
           /* Read full sector directly into caller's buffer. */
+          // Need to lock inode before doing this.
           cache_get_block (sector_idx, (void *) (buffer + bytes_read));
         }
       else
@@ -504,15 +496,21 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       sema_up (&inode->inode_lock);
       return 0;
     }
-  sema_up (&inode->inode_lock);
 
+  int resized = -1;
   // Resize file if necessary.
   if (inode->data.length < offset + size)
     {
-      if (!inode_resize (&inode->data, offset + size))
+      resized = inode_resize (&inode->data, offset + size);
+      sema_up (&inode->inode_lock);
+      if (!resized)
         return 0;
-      cache_write_block (inode->sector, &inode->data);
+      else
+        cache_write_block (inode->sector, &inode->data);
     }
+
+  if (resized == -1)
+    sema_up (&inode->inode_lock);
 
   while (size > 0)
     {

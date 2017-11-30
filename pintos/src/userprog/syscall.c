@@ -206,7 +206,7 @@ sys_exec (const char *ufile)
   tid_t tid;
   char *kfile = copy_in_string (ufile);
 
-  tid = process_execute (kfile);
+  tid = process_execute (kfile); // Automatically handles files in directories
 
   palloc_free_page (kfile);
 
@@ -319,9 +319,10 @@ sys_filesize (int handle)
 {
   struct file_descriptor *fd = lookup_fd (handle);
   int size;
-
-  size = file_length (fd->file);
-
+  if (fd->file)
+    size = file_length (fd->file);
+  else
+    size = file_length (fd->dir);
   return size;
 }
 

@@ -223,9 +223,14 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
     }
   if (!found_empty_spot)
     {
-      inode_resize (&dir->inode->data, dir->inode->data.length +
-                                       sizeof e - (dir->inode->data.length % sizeof e));
-      cache_write_block (dir->inode->sector, &dir->inode->data);
+      // Do we need to check if resize succeeded?
+      int new_size = dir->inode->data.length + sizeof e - (dir->inode->data.length % sizeof e);
+      new_size += BLOCK_SECTOR_SIZE - (new_size % BLOCK_SECTOR_SIZE); // Round to next block size
+      if (inode_resize (&dir->inode->data, new_size))
+        cache_write_block (dir->inode->sector, &dir->inode->data);
+      else
+        return false;
+
     }
   /* Write slot. */
   e.in_use = true;
