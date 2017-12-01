@@ -16,7 +16,8 @@ struct inode_disk
     block_sector_t start[100];          /* Direct pointers to sectors. */
     block_sector_t doubly_indirect;     /* Doubly indirect pointer. */
     off_t length;                       /* File size in bytes. */
-    uint32_t unused[25];                /* Not used. */
+    bool is_dir;                        /* Inode belongs to directory */
+    uint32_t unused[24];                /* Not used. */
     unsigned magic;                     /* Magic number. */
   };
 
@@ -36,7 +37,7 @@ struct inode
 void inode_init (void);
 void lock_inode_list (void);
 void release_inode_list (void);
-bool inode_create (block_sector_t, off_t);
+bool inode_create (block_sector_t, off_t, bool);
 struct inode *inode_open (block_sector_t);
 struct inode *inode_reopen (struct inode *);
 block_sector_t inode_get_inumber (const struct inode *);

@@ -264,7 +264,7 @@ release_inode_list (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, bool is_dir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -282,6 +282,7 @@ inode_create (block_sector_t sector, off_t length)
       memset (disk_inode->start, 0, 100 * sizeof(block_sector_t));
       disk_inode->doubly_indirect = 0;
       disk_inode->length = 0;
+      disk_inode->is_dir = is_dir;
       disk_inode->magic = INODE_MAGIC;
       if (inode_resize (disk_inode, length))
         {

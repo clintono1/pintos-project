@@ -254,6 +254,7 @@ struct file_descriptor
     struct list_elem elem;      /* List element. */
     struct file *file;          /* File. */
     struct dir *dir;            /* Directory. */
+    bool is_dir;                /* Is directory */
     int handle;                 /* File handle. */
   };
 
@@ -272,11 +273,13 @@ sys_open (const char *ufile)
         {
           fd->dir = dir_open_path (kfile);
           fd->file = NULL;
+          fd->is_dir = true;
         }
       else
         {
           fd->dir = NULL;
           fd->file = filesys_open (kfile);
+          fd->is_dir = false;
         }
       if (fd->file || fd->dir)
         {
@@ -736,10 +739,10 @@ sys_isdir (int fd)
 
   for (e = list_begin (&cur->fds); e != list_end (&cur->fds); e = next)
     {
-      struct file_descriptor *fd;
-      fd = list_entry (e, struct file_descriptor, elem);
-      if (fd->handle == fd)
-          return fd->dir;
+      struct file_descriptor *fd_struct;
+      fd_struct = list_entry (e, struct file_descriptor, elem);
+      if (fd_struct->handle == fd)
+          return fd_struct->is_dir;
       next = list_next (e);
     }
   return false;

@@ -64,7 +64,7 @@ filesys_create (const char *name, off_t initial_size)
       free (file_name);
       return false;
     }
-  if (inode_create (new_file_sector, initial_size))
+  if (inode_create (new_file_sector, initial_size, false))
     {
       if (dir_add (last_dir, file_name, new_file_sector, false))
         {
