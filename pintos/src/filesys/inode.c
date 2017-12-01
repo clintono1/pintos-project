@@ -27,7 +27,7 @@ int get_next_cache_block_to_evict (void);
 
 bool inode_resize (struct inode_disk *id, off_t size);
 
-block_sector_t inode_get_sector (struct inode_disk *id, uint32_t sector);
+block_sector_t inode_get_sector (struct inode *inode, uint32_t sector);
 
 struct cache_entry
   {
@@ -55,10 +55,18 @@ flush_cache (void)
   int i;
   for (i = 0; i < 64; i++)
     {
-      sema_down (&cache[i]->sector_lock);
-      if (cache[i] && cache[i]->valid)
-        block_write (fs_device, cache[i]->sector, cache[i]->block);
-      sema_up (&cache[i]->sector_lock);
+      // sema_down (&cache[i]->sector_lock);
+      // if (cache[i] && cache[i]->valid)
+      //   block_write (fs_device, cache[i]->sector, cache[i]->block);
+      // sema_up (&cache[i]->sector_lock);
+
+      if (cache[i])
+        {
+          sema_down (&cache[i]->sector_lock);
+          if (cache[i]->valid)
+            block_write (fs_device, cache[i]->sector, cache[i]->block);
+          sema_up (&cache[i]->sector_lock);
+        }
     }
   lock_release (&cache_lock);
 }
@@ -214,14 +222,7 @@ static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos)
 {
   ASSERT (inode != NULL);
-  block_sector_t ret_val;
-  sema_down (&inode->inode_lock);
-  if (pos < inode->data.length)
-    ret_val = inode_get_sector (&inode->data, pos / BLOCK_SECTOR_SIZE);
-  else
-    ret_val = -1;
-  sema_up (&inode->inode_lock);
-  return ret_val;
+  return inode_get_sector (inode, pos / BLOCK_SECTOR_SIZE);
 }
 
 /* List of open inodes, so that opening a single inode twice
@@ -283,10 +284,14 @@ inode_create (block_sector_t sector, off_t length)
         }
       if (sectors > 0)
         {
-          static char zeros[BLOCK_SECTOR_SIZE];
+          char zeros[BLOCK_SECTOR_SIZE];
+          memset(zeros, 0, BLOCK_SECTOR_SIZE);
           size_t i;
+          struct inode inode;
+          inode.data = *disk_inode;
+          sema_init (&inode.inode_lock, 1);
           for (i = 0; i < sectors; i++)
-            cache_write_block (inode_get_sector (disk_inode, i), zeros);
+            cache_write_block (inode_get_sector (&inode, i), zeros);
         }
       free (disk_inode);
     }
@@ -295,17 +300,28 @@ inode_create (block_sector_t sector, off_t length)
 
 /* Returns the sector number of the sector-th sector in ID. */
 block_sector_t
-inode_get_sector (struct inode_disk *id, uint32_t sector)
+inode_get_sector (struct inode *inode, uint32_t sector)
 {
+  sema_down (&inode->inode_lock); // Prevent resize
+  int length = inode->data.length;
+  if (length / BLOCK_SECTOR_SIZE < sector)
+    {
+      sema_up (&inode->inode_lock);
+      return -1;
+    }
   if (sector < 100)
-    return id->start[sector];
-
+    {
+      block_sector_t retval = inode->data.start[sector];
+      sema_up (&inode->inode_lock);
+      return retval;
+    }
   block_sector_t buffer[128];
-  cache_get_block (id->doubly_indirect, buffer);
+  cache_get_block (inode->data.doubly_indirect, buffer);
   uint32_t indirect_pointer =  (uint32_t) (sector - 100) / (uint32_t) powf (2, 7); // sector num divided by 2^7 which is the number of sectors for each indirect pointer
   block_sector_t buffer2[128];
   cache_get_block (buffer[indirect_pointer], buffer2);
   uint32_t block = (sector - 100) % (uint32_t) powf (2, 7); // get remainder, which represents the index of the indirect block
+  sema_up (&inode->inode_lock);
   return buffer2[block];
 }
 
@@ -334,24 +350,25 @@ inode_open (block_sector_t sector)
         }
       sema_up (&inode->inode_lock);
     }
-  release_inode_list ();
 
   /* Allocate memory. */
-  inode = malloc (sizeof *inode);
+  inode = malloc (sizeof (struct inode));
   if (inode == NULL)
-    return NULL;
+    {
+      release_inode_list ();
+      return NULL;
+    }
 
   /* Initialize. */
   sema_init (&inode->inode_lock, 0);
-  lock_inode_list ();
   list_push_front (&open_inodes, &inode->elem);
   release_inode_list ();
   inode->sector = sector;
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-  sema_up (&inode->inode_lock);
   cache_get_block (inode->sector, &inode->data);
+  sema_up (&inode->inode_lock);
   return inode;
 }
 
@@ -739,5 +756,5 @@ inode_length (const struct inode *inode)
   sema_down (&inode->inode_lock);
   int length = inode->data.length;
   sema_up (&inode->inode_lock);
-  return length;;
+  return length;
 }

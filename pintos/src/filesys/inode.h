@@ -5,6 +5,7 @@
 #include "filesys/off_t.h"
 #include "devices/block.h"
 #include "lib/kernel/list.h"
+#include "threads/synch.h"
 
 struct bitmap;
 
@@ -28,7 +29,7 @@ struct inode
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
-    struct semaphore *inode_lock;       /* Lock the inode */
+    struct semaphore inode_lock;        /* Lock the inode */
   };
 
 
