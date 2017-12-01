@@ -418,7 +418,7 @@ inode_close (struct inode *inode)
       if (inode->removed)
         {
           inode_resize (&inode->data, 0);
-          cache_write_block (inode->sector, &inode->data);
+          // cache_write_block (inode->sector, &inode->data); //needed?
           free_map_release (inode->sector, 1);
         }
       sema_up (&inode->inode_lock);
@@ -451,6 +451,8 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 
   while (size > 0)
     {
+      // File can be resized while we are reading. How to prevent??
+
       /* Disk sector to read, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
@@ -592,7 +594,7 @@ inode_truncate_blocks (struct inode_disk *id, off_t size)
       if (size <= BLOCK_SECTOR_SIZE * i && id->start[i] != 0)
         {
           free_map_release (id->start[i], 1);
-          id->start[i] = 0; //Stored in memory, so don't need to write back until we remove inode?
+          id->start[i] = 0;
         }
     }
 
@@ -639,7 +641,8 @@ inode_truncate_blocks (struct inode_disk *id, off_t size)
 
 /* Resizes INODE to be of SIZE size.
    You should write the inode_disk to cache after resizing, or
-   the new size will not persist. */
+   the new size will not persist. Should acquire inode lock before running
+   this function. */
 bool
 inode_resize (struct inode_disk *id, off_t size)
 {

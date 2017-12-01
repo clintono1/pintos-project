@@ -226,7 +226,10 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
       // Do we need to check if resize succeeded?
       int new_size = dir->inode->data.length + sizeof e - (dir->inode->data.length % sizeof e);
       new_size += BLOCK_SECTOR_SIZE - (new_size % BLOCK_SECTOR_SIZE); // Round to next block size
-      if (inode_resize (&dir->inode->data, new_size))
+      sema_down (&dir->inode->inode_lock);
+      bool resized = inode_resize (&dir->inode->data, new_size);
+      sema_up (&dir->inode->inode_lock);
+      if (resized)
         cache_write_block (dir->inode->sector, &dir->inode->data);
       else
         return false;
