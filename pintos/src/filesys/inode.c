@@ -339,8 +339,8 @@ inode_open (block_sector_t sector)
       if (inode->sector == sector)
         {
           inode->open_cnt++;
-          sema_up (&inode->inode_lock);
           release_inode_list ();
+          sema_up (&inode->inode_lock);
           return inode;
         }
       sema_up (&inode->inode_lock);
@@ -560,15 +560,63 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 break;
             }
 
-          /* If the sector contains data before or after the chunk
-             we're writing, then we need to read in the sector
-             first.  Otherwise we start with a sector of all zeros. */
+          bool found_in_cache = false;
+          struct cache_entry *entry;
           if (sector_ofs > 0 || chunk_size < sector_left)
-            cache_get_block (sector_idx, (void *) bounce);
+            {
+              // cache get block
+              int i;
+              lock_acquire (&cache_lock);
+              // Check if sector is already in the cache and return if it is.
+              for (i = 0; i < 64; i++)
+                {
+                  if (cache[i] && cache[i]->sector == sector_idx)
+                    {
+                      sema_down (&cache[i]->sector_lock);
+                      cache[i]->reference = 1;
+                      lock_release (&cache_lock);
+                      memcpy (bounce, cache[i]->block, BLOCK_SECTOR_SIZE);
+                      entry = cache[i];
+                      found_in_cache = true;
+                      break;
+                    }
+                }
+              if (!found_in_cache)
+                {
+                  int index = get_next_cache_block_to_evict ();
+                  void *block;
+                  if (cache[index])
+                    {
+                      sema_down (&cache[index]->sector_lock);
+                      lock_release (&cache_lock);
+                      if (cache[index]->dirty)
+                        block_write (fs_device, cache[index]->sector, cache[index]->block);
+                      entry = cache[index];
+                      block = cache[index]->block;
+                    }
+                  else
+                    {
+                      entry = malloc (sizeof(struct cache_entry));
+                      block = malloc (BLOCK_SECTOR_SIZE);
+                      sema_init (&entry->sector_lock, 0);
+                      cache[index] = entry;
+                      entry->block = block;
+                      lock_release (&cache_lock);
+                    }
+                  entry->dirty = 0;
+                  entry->valid = 1;
+                  entry->reference = 1;
+                  entry->sector = sector_idx;
+                  block_read (fs_device, sector_idx, block);
+                  memcpy (bounce, block, BLOCK_SECTOR_SIZE);
+                }
+            }
           else
             memset (bounce, 0, BLOCK_SECTOR_SIZE);
           memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
-          cache_write_block (sector_idx, (void *) bounce);
+          entry->dirty = 1;
+          memcpy (entry->block, bounce, BLOCK_SECTOR_SIZE);
+          sema_up (&entry->sector_lock);
         }
 
       /* Advance. */

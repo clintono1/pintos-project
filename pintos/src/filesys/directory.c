@@ -248,7 +248,8 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is
       struct dir *new_dir = dir_open (inode);
       if (!new_dir)
         return false;
-      add_default_directories (new_dir, dir);
+      if (!add_default_directories (new_dir, dir))
+        return false;
       dir_close (new_dir);
     }
   strlcpy (e.name, name, sizeof e.name);
@@ -342,21 +343,34 @@ add_default_directories (struct dir *dir, struct dir *parent_dir)
 {
   struct dir_entry e;
   // Add parent directory
-  e.inode_sector = parent_dir->inode->sector;
+  sema_down (&parent_dir->inode->inode_lock);
+  block_sector_t parent_sector = parent_dir->inode->sector;
+  bool parent_in_use = !parent_dir->inode->removed;
+  sema_up (&parent_dir->inode->inode_lock);
+
+  struct dir_entry new_dirs[2];
+
+  e.inode_sector = parent_sector;
+  off_t original_offset = dir->pos;
   strlcpy (e.name, "..", NAME_MAX + 1);
   e.is_dir = true;
-  e.in_use = !parent_dir->inode->removed; // Synchronization?
-  inode_write_at (dir->inode, &e, sizeof (e), dir->pos); // Error check?
+  e.in_use = parent_in_use;
   dir->pos += sizeof (e);
+  new_dirs[0] = e;
 
   // Add current directory.
+  sema_down (&dir->inode->inode_lock);
   e.inode_sector = dir->inode->sector;
+  e.in_use = !dir->inode->removed;
+  sema_up (&dir->inode->inode_lock);
   strlcpy (e.name, ".", NAME_MAX + 1);
   e.is_dir = true;
-  e.in_use = !dir->inode->removed; // Synchronization?
+  new_dirs[1] = e;
 
-  inode_write_at (dir->inode, &e, sizeof (e), dir->pos); // Error check?
-  dir->pos += sizeof (e);
-
-  return true;
+  if (inode_write_at (dir->inode, new_dirs, 2 * sizeof (e), original_offset))
+    {
+      dir->pos += sizeof (e);
+      return true;
+    }
+  return false;
 }
