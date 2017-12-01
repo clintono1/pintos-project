@@ -811,6 +811,7 @@ syscall_exit (void)
       fd = list_entry (e, struct file_descriptor, elem);
       next = list_next (e);
       file_close (fd->file);
+      dir_close (fd->dir);
       free (fd);
     }
 
