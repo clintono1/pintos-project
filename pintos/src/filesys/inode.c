@@ -51,12 +51,19 @@ flush_cache (void)
       if (cache[i])
         {
           sema_down (&cache[i]->sector_lock);
-          if (cache[i]->valid)
-            block_write (fs_device, cache[i]->sector, cache[i]->block);
-          sema_up (&cache[i]->sector_lock);
         }
     }
   lock_release (&cache_lock);
+  for (i = 0; i < 64; i++)
+    {
+      if (cache[i])
+        {
+          if (cache[i]->valid && cache[i]->dirty)
+            block_write (fs_device, cache[i]->sector, cache[i]->block);
+          cache[i]->dirty = false;
+          sema_up (&cache[i]->sector_lock);
+        }
+    }
 }
 
 void
@@ -66,15 +73,20 @@ clear_cache (void)
   int i;
   for (i = 0; i < 64; i++)
     {
+
+      if (cache[i])
+          sema_down (&cache[i]->sector_lock);
+    }
+  lock_release (&cache_lock);
+  for (i = 0; i < 64; i++)
+    {
       if (cache[i])
         {
-          sema_down (&cache[i]->sector_lock);
           free (cache[i]->block);
           free (cache[i]);
           cache[i] = NULL;
         }
     }
-  lock_release (&cache_lock);
 }
 
 
@@ -84,10 +96,11 @@ get_next_cache_block_to_evict (void)
 {
   // Might need to account for the case where all blocks are locked
   // Currently skips over blocks that are locked. Uses the clock algorithm.
+  // This must be called when the cache lock is held.
   clock_hand++;
   while (1)
     {
-      if (clock_hand == 64)
+      if (clock_hand >= 64)
         clock_hand = 0;
       if (!cache[clock_hand])
         return clock_hand;
