@@ -286,17 +286,6 @@ inode_create (block_sector_t sector, off_t length)
           cache_write_block (sector, disk_inode);
           success = true;
         }
-      else if (sectors > 0)
-        {
-          char zeros[BLOCK_SECTOR_SIZE];
-          memset (zeros, 0, BLOCK_SECTOR_SIZE);
-          size_t i;
-          struct inode inode;
-          inode.data = *disk_inode;
-          sema_init (&inode.inode_lock, 1);
-          for (i = 0; i < sectors; i++)
-            cache_write_block (inode_get_sector (&inode, i), zeros);
-        }
       free (disk_inode);
     }
   return success;
@@ -527,11 +516,14 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       resized = inode_resize (&inode->data, offset + size);
       sema_up (&inode->inode_lock);
       if (!resized)
-        return 0;
+        {
+          return 0;
+        }
       else
-        cache_write_block (inode->sector, &inode->data);
+        {
+          cache_write_block (inode->sector, &inode->data);
+        }
     }
-
   if (resized == -1)
     sema_up (&inode->inode_lock);
 
@@ -652,7 +644,8 @@ inode_resize (struct inode_disk *id, off_t size)
 {
   block_sector_t sector;
   int i;
-
+  char zeros[BLOCK_SECTOR_SIZE];
+  memset (zeros, 0, BLOCK_SECTOR_SIZE);
   // Handle direct pointers
   for (i = 0; i < 100; i++)
   {
@@ -664,6 +657,7 @@ inode_resize (struct inode_disk *id, off_t size)
             return false;
           }
         id->start[i] = sector;
+        cache_write_block (sector, zeros);
       }
   }
 
@@ -720,6 +714,7 @@ inode_resize (struct inode_disk *id, off_t size)
                           return false;
                         }
                       singly[j] = sector;
+                      cache_write_block (sector, zeros);
                     }
                 }
               cache_write_block (doubly[i], singly);
