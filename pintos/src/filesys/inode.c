@@ -139,6 +139,7 @@ cache_get_block (block_sector_t sector, void *buffer)
   if (cache[index])
     {
       sema_down (&cache[index]->sector_lock);
+      lock_release (&cache_lock);
       if (cache[index]->dirty)
         block_write (fs_device, cache[index]->sector, cache[index]->block);
       entry = cache[index];
@@ -151,12 +152,12 @@ cache_get_block (block_sector_t sector, void *buffer)
       sema_init (&entry->sector_lock, 0);
       cache[index] = entry;
       entry->block = block;
+      lock_release (&cache_lock);
     }
   entry->dirty = 0;
   entry->valid = 1;
   entry->reference = 1;
   entry->sector = sector;
-  lock_release (&cache_lock);
   block_read (fs_device, sector, block);
   sema_up (&entry->sector_lock);
   memcpy (buffer, block, BLOCK_SECTOR_SIZE);
@@ -187,6 +188,7 @@ cache_write_block (block_sector_t sector, void *buffer)
   if (cache[index])
     {
       sema_down (&cache[index]->sector_lock);
+      lock_release (&cache_lock);
       if (cache[index]->dirty)
         block_write (fs_device, cache[index]->sector, cache[index]->block);
       entry = cache[index];
@@ -199,12 +201,12 @@ cache_write_block (block_sector_t sector, void *buffer)
       sema_init (&entry->sector_lock, 0);
       cache[index] = entry;
       entry->block = block;
+      lock_release (&cache_lock);
     }
   entry->dirty = 1;
   entry->valid = 1;
   entry->reference = 1;
   entry->sector = sector;
-  lock_release (&cache_lock);
   memcpy (block, buffer, BLOCK_SECTOR_SIZE);
   sema_up (&entry->sector_lock);
 }
