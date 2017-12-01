@@ -159,7 +159,7 @@ cache_get_block (block_sector_t sector, void *buffer)
   lock_release (&cache_lock);
   block_read (fs_device, sector, block);
   sema_up (&entry->sector_lock);
-  memcpy(buffer, block, BLOCK_SECTOR_SIZE);
+  memcpy (buffer, block, BLOCK_SECTOR_SIZE);
 }
 
 void
@@ -205,7 +205,7 @@ cache_write_block (block_sector_t sector, void *buffer)
   entry->reference = 1;
   entry->sector = sector;
   lock_release (&cache_lock);
-  memcpy(block, buffer, BLOCK_SECTOR_SIZE);
+  memcpy (block, buffer, BLOCK_SECTOR_SIZE);
   sema_up (&entry->sector_lock);
 }
 
@@ -277,7 +277,7 @@ inode_create (block_sector_t sector, off_t length)
   if (disk_inode != NULL)
     {
       size_t sectors = bytes_to_sectors (length);
-      memset(disk_inode->start, 0, 100 * sizeof(block_sector_t));
+      memset (disk_inode->start, 0, 100 * sizeof(block_sector_t));
       disk_inode->doubly_indirect = 0;
       disk_inode->length = 0;
       disk_inode->magic = INODE_MAGIC;
@@ -286,10 +286,10 @@ inode_create (block_sector_t sector, off_t length)
           cache_write_block (sector, disk_inode);
           success = true;
         }
-      if (sectors > 0)
+      else if (sectors > 0)
         {
           char zeros[BLOCK_SECTOR_SIZE];
-          memset(zeros, 0, BLOCK_SECTOR_SIZE);
+          memset (zeros, 0, BLOCK_SECTOR_SIZE);
           size_t i;
           struct inode inode;
           inode.data = *disk_inode;
