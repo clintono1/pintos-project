@@ -12,18 +12,6 @@
 #define INODE_MAGIC 0x494e4f44
 
 int get_next_cache_block_to_evict (void);
-// void cache_write_block (block_sector_t sector, void *buffer);
-// void cache_get_block (block_sector_t sector, void *buffer);
-/* On-disk inode.
-   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
-// struct inode_disk
-//   {
-//     block_sector_t start[100];          /* Direct pointers to sectors. */
-//     block_sector_t doubly_indirect;     /* Doubly indirect pointer. */
-//     off_t length;                       /* File size in bytes. */
-//     unsigned magic;                     /* Magic number. */
-//     uint32_t unused[25];                /* Not used. */
-//   };
 
 bool inode_resize (struct inode_disk *id, off_t size);
 
@@ -103,10 +91,13 @@ get_next_cache_block_to_evict (void)
         clock_hand = 0;
       if (!cache[clock_hand])
         return clock_hand;
-      if (cache[clock_hand]->reference && cache[clock_hand]->sector_lock.value)
-        cache[clock_hand]->reference = 0;
-      else
-        return clock_hand;
+      if (cache[clock_hand]->sector_lock.value)
+        {
+          if (cache[clock_hand]->reference)
+            cache[clock_hand]->reference = 0;
+          else
+            return clock_hand;
+        }
       clock_hand++;
     }
 }
