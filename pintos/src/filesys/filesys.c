@@ -7,6 +7,7 @@
 #include "filesys/inode.h"
 #include "filesys/directory.h"
 #include "userprog/syscall.h"
+#include "devices/block.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -134,6 +135,18 @@ filesys_remove (const char *name)
   dir_close (last_dir);
   free (file_name);
   return success;
+}
+
+int
+num_disk_writes()
+{
+  return get_write_cnt (fs_device);
+}
+
+int
+num_disk_reads()
+{
+  return get_read_cnt (fs_device);
 }
 
 /* Formats the file system. */
