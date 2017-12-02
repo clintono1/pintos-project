@@ -190,3 +190,21 @@ inumber (int fd)
 {
   return syscall1 (SYS_INUMBER, fd);
 }
+
+int
+clearcache (void)
+{
+  return syscall0 (SYS_CLEARCACHE);
+}
+
+int
+diskwrites (void)
+{
+  return syscall0 (SYS_DISKWRITES);
+}
+
+int
+diskreads (void)
+{
+  return syscall0 (SYS_DISKREADS);
+}

@@ -221,3 +221,14 @@ list_elem_to_block (struct list_elem *list_elem)
           : NULL);
 }
 
+int
+get_read_cnt (struct block *block)
+{
+  return block->read_cnt;
+} 
+
+int
+get_write_cnt (struct block *block)
+{
+  return block->write_cnt;
+} 

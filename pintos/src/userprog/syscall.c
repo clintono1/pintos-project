@@ -6,6 +6,8 @@
 #include "userprog/pagedir.h"
 #include "devices/input.h"
 #include "devices/shutdown.h"
+#include "devices/block.h"
+// #include "devices/block.c"
 #include "filesys/directory.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
@@ -35,6 +37,9 @@ static bool sys_mkdir (const char *dir);
 static bool sys_readdir (int fd, char *name);
 static bool sys_isdir (int fd);
 static int sys_inumber (int fd);
+static int sys_clearcache (void);
+static int sys_diskwrites (void);
+static int sys_diskreads (void);
 
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t);
@@ -84,6 +89,9 @@ syscall_handler (struct intr_frame *f)
       {2, (syscall_function *) sys_readdir},
       {1, (syscall_function *) sys_isdir},
       {1, (syscall_function *) sys_inumber},
+      {0, (syscall_function *) sys_clearcache},
+      {0, (syscall_function *) sys_diskwrites},
+      {0, (syscall_function *) sys_diskreads},
     };
 
   const struct syscall *sc;
@@ -820,4 +828,23 @@ syscall_exit (void)
 
   if (!strcmp(cur->name, "main"))
     flush_cache ();
+}
+
+int
+sys_clearcache (void)
+{
+  clear_cache();
+  return 1;
+}
+
+int
+sys_diskwrites (void)
+{
+  return num_disk_writes ();
+}
+
+int
+sys_diskreads (void)
+{
+  return num_disk_reads ();
 }
