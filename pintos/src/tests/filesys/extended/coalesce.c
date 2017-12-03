@@ -16,25 +16,37 @@ byte-by-byte. The total number of device writes should be on the order of 128 (b
 void
 test_main (void)
 {
-  CHECK (mkdir ("start"), "mkdir \"start\"");
-  CHECK (chdir ("start"), "chdir \"start\"");
 
   char name[3][READDIR_MAX_LEN + 1];
-  char file_name[16], dir_name[16];
-  char contents[2048];
+  char file_name[] = "test";
+  char contents[512];
   int fd;
+  int writesize;
 
+  CHECK (create (file_name, 65536), "create \"%s\"", file_name);
   CHECK ((fd = open (file_name)) > 1, "open \"%s\"", file_name);
 
+  int before_test = diskwrites ();
+  clearcache ();
+
   int i = 0;
-  while (i < 2048)
+  while (i < 128)
     {
-      write(fd, contents + i, 1);
+      write (fd, contents, 512);
       i++;
     }
-  CHECK(diskwrites () < 200, "num actual writes");
+
+  int j = 0;
+  while (j < 128)
+    {
+
+      read (fd, contents + j, 512);
+
+      j++;
+    }
+
+  CHECK (diskwrites () - before_test < 200, "num actual writes: \"%d\"", diskwrites () - before_test);
 
   close (fd);
-
 
 }

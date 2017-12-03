@@ -19,16 +19,18 @@ static char buf1[2048];
 void
 test_main (void)
 {
-  CHECK (mkdir ("start"), "mkdir \"start\"");
-  CHECK (chdir ("start"), "chdir \"start\"");
+  // CHECK (mkdir ("start"), "mkdir \"start\"");
+  // CHECK (chdir ("start"), "chdir \"start\"");
 
   char name[3][READDIR_MAX_LEN + 1];
-  char file_name[16], dir_name[16];
+  char file_name[] = "test";
   char contents[2048];
   int fd;
 
   /* Create file. */
+  CHECK (create (file_name, 0), "create \"%s\"", file_name);
   CHECK ((fd = open (file_name)) > 1, "open \"%s\"", file_name);
+  // msg ("fd: %d", fd);
   if (write (fd, contents, strlen (contents)) != (int) strlen (contents))
     {
       CHECK (remove (file_name), "remove \"%s\"", file_name);
@@ -40,10 +42,10 @@ test_main (void)
   fd = open (file_name);
   read (fd, buf1, 2048);
   unsigned long long cache_misses1 = diskreads ();
-  msg("1st time: %d", cache_misses1);
+  msg ("1st time: %llu", cache_misses1);
   read (fd, buf1, 2048);
   unsigned long long cache_misses2 = diskreads ();  
-  msg("2nd time: %d", cache_misses2);
+  // msg("2nd time: %llu", cache_misses2);
   CHECK (cache_misses1 > cache_misses2, "should have less cache misses on 2nd read");
 
 }

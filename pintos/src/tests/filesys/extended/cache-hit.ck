@@ -3,7 +3,9 @@ use strict;
 use warnings;
 use tests::tests;
 check_expected ([<<'EOF']);
-(cache-effectiveness) begin
-cache-effectiveness: exit(-1)
+(cache-hit) begin
+(cache-hit) create "test"
+(cache-hit) open "test"
+cache-hit: exit(-1)
 EOF
 pass;
