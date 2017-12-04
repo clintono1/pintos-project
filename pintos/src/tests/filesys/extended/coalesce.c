@@ -1,4 +1,4 @@
-/* 
+/*
 Test your buffer cache’s ability to coalesce writes to the same sector. Each block device keeps
 a read_cnt counter and a write_cnt counter. Write a large file byte-by-byte (make the total
 file size at least 64KB, which is twice the maximum allowed buffer cache size). Then, read it in
@@ -17,35 +17,38 @@ void
 test_main (void)
 {
 
-  char name[3][READDIR_MAX_LEN + 1];
   char file_name[] = "test";
   char contents[512];
   int fd;
-  int writesize;
 
   CHECK (create (file_name, 65536), "create \"%s\"", file_name);
   CHECK ((fd = open (file_name)) > 1, "open \"%s\"", file_name);
 
-  int before_test = diskwrites ();
   clearcache ();
+  int before_test = diskwrites ();
 
   int i = 0;
+  int k = 0;
   while (i < 128)
     {
-      write (fd, contents, 512);
+      for (k = 0; k < 512; k++)
+        write (fd, contents + k, 1);
       i++;
     }
+
+  msg ("seek \"%s\" to 0", file_name);
+  seek (fd, 0);
 
   int j = 0;
   while (j < 128)
     {
-
-      read (fd, contents + j, 512);
-
+      for (k = 0; k < 512; k++)
+        read (fd, contents + k, 1);
       j++;
     }
 
-  CHECK (diskwrites () - before_test < 200, "num actual writes: \"%d\"", diskwrites () - before_test);
+  int after_test = diskwrites ();
+  CHECK (after_test - before_test == 128, "number of disk writes: \"%d\"", after_test - before_test);
 
   close (fd);
 

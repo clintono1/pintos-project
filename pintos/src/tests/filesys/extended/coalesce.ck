@@ -6,7 +6,8 @@ check_expected (IGNORE_EXIT_CODES => 1, [<<'EOF']);
 (coalesce) begin
 (coalesce) create "test"
 (coalesce) open "test"
-(coalesce) num actual writes
+(coalesce) seek "test" to 0
+(coalesce) number of disk writes: "128"
 (coalesce) end
 EOF
 pass;

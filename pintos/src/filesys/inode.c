@@ -43,15 +43,8 @@ flush_cache (void)
   int i;
   for (i = 0; i < 64; i++)
     {
-      // sema_down (&cache[i]->sector_lock);
-      // if (cache[i] && cache[i]->valid)
-      //   block_write (fs_device, cache[i]->sector, cache[i]->block);
-      // sema_up (&cache[i]->sector_lock);
-
       if (cache[i])
-        {
-          sema_down (&cache[i]->sector_lock);
-        }
+        sema_down (&cache[i]->sector_lock);
     }
   lock_release (&cache_lock);
   for (i = 0; i < 64; i++)
@@ -82,11 +75,14 @@ clear_cache (void)
     {
       if (cache[i])
         {
+          if (cache[i]->valid && cache[i]->dirty)
+            block_write (fs_device, cache[i]->sector, cache[i]->block);
           free (cache[i]->block);
           free (cache[i]);
           cache[i] = NULL;
         }
     }
+  clock_hand = 0;
 }
 
 
@@ -694,7 +690,7 @@ bool
 inode_resize (struct inode_disk *id, off_t size)
 {
   block_sector_t sector;
-  int i;
+  volatile int i;
   char zeros[BLOCK_SECTOR_SIZE];
   memset (zeros, 0, BLOCK_SECTOR_SIZE);
   // Handle direct pointers
@@ -754,7 +750,7 @@ inode_resize (struct inode_disk *id, off_t size)
                   cache_get_block (doubly[i], singly);
                 }
               // If we use this direct pointer
-              int j;
+              volatile int j;
               for (j = 0; j < 128; j++)
                 {
                   if (size > 512 * 100 + (i * (int) powf (2, 16)) + (j * BLOCK_SECTOR_SIZE) && singly[j] == 0)
